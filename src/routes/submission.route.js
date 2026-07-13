@@ -1,0 +1,86 @@
+const { Router } = require("express");
+const authMiddleware = require("../middlewares/auth.middleware");
+const authorizeRole = require("../middlewares/authorize-role.middleware");
+const {
+  listSubmissionsHandler,
+  startSubmission,
+  getSubmissionByIdHandler,
+  deleteSubmissionByIdHandler,
+  submitAnswer,
+  listSubmissionAnswersHandler,
+  getSubmissionAnswerByIdHandler,
+  updateSubmissionAnswerByIdHandler,
+  deleteSubmissionAnswerByIdHandler,
+  recordBehaviorLog,
+  getSubmissionBehaviorSummary,
+  getSubmissionBehaviorLogs,
+  getBehaviorLogByIdHandler,
+  deleteBehaviorLogByIdHandler,
+} = require("../controllers/submission.controller");
+
+const router = Router();
+
+router.use(authMiddleware);
+
+router.get(
+  "/",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  listSubmissionsHandler,
+);
+router.post("/", authorizeRole("STUDENT"), startSubmission);
+router.get(
+  "/:id",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  getSubmissionByIdHandler,
+);
+router.delete(
+  "/:id",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  deleteSubmissionByIdHandler,
+);
+
+router.post("/:id/answers", authorizeRole("STUDENT"), submitAnswer);
+router.get(
+  "/:id/answers",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  listSubmissionAnswersHandler,
+);
+router.get(
+  "/:id/answers/:answerId",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  getSubmissionAnswerByIdHandler,
+);
+router.patch(
+  "/:id/answers/:answerId",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  updateSubmissionAnswerByIdHandler,
+);
+router.delete(
+  "/:id/answers/:answerId",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  deleteSubmissionAnswerByIdHandler,
+);
+
+router.post("/:id/behavior-logs", authorizeRole("STUDENT"), recordBehaviorLog);
+router.get(
+  "/:id/behavior-summary",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  getSubmissionBehaviorSummary,
+);
+router.get(
+  "/:id/behavior-logs",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  getSubmissionBehaviorLogs,
+);
+router.get(
+  "/:id/behavior-logs/:logId",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  getBehaviorLogByIdHandler,
+);
+router.delete(
+  "/:id/behavior-logs/:logId",
+  authorizeRole("ADMIN", "TEACHER", "STUDENT"),
+  deleteBehaviorLogByIdHandler,
+);
+
+module.exports = router;
