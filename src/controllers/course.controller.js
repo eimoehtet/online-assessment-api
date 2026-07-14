@@ -2,13 +2,14 @@ const {
   createCourse: createCourseRecord,
   listCourses,
   getCourseById,
+  getCourseByTeacherId,
   findCourseByCode,
   updateCourseById,
   deleteCourseById,
 } = require("../services/course.service");
 const { getUserById } = require("../services/user.service");
 
-const allowedRoles = ["ADMIN"];
+const allowedRoles = ["ADMIN", "TEACHER"];
 
 const getUniqueConflictMessage = (error) => {
   const target = error?.meta?.target;
@@ -164,6 +165,21 @@ const getCourseByIdHandler = async (req, res) => {
   }
 };
 
+const getCourseByTeacherIdHandler = async (req, res) => {
+  console.log("Received request to get courses for teacher_id:", req.params.teacherId);
+  try {
+    const teacherId = parseTeacherId(req.params.teacherId);
+    if (!teacherId) {
+      return res.status(400).json({ message: "Invalid teacher_id." });
+    }
+
+    const courses = await getCourseByTeacherId(teacherId);
+    return res.status(200).json({ courses });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to fetch courses." });
+  }
+};
+
 const updateCourse = async (req, res) => {
   try {
     const courseId = parseCourseId(req.params.id);
@@ -260,6 +276,7 @@ module.exports = {
   createCourse,
   getCourses,
   getCourseById: getCourseByIdHandler,
+  getCourseByTeacherId: getCourseByTeacherIdHandler,
   updateCourse,
   deleteCourse,
   allowedRoles,

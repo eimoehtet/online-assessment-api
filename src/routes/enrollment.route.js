@@ -14,7 +14,7 @@ const authorizeRole = require('../middlewares/authorize-role.middleware');
 const router = Router();
 
 router.use(authMiddleware);
-router.use(authorizeRole('ADMIN', 'STUDENT'));
+router.use(authorizeRole('ADMIN', 'STUDENT', 'TEACHER'));
 
 router.post('/', createEnrollment);
 router.post('/bulk', authorizeRole('ADMIN'), bulkEnrollment);

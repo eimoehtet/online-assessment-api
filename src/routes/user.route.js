@@ -6,6 +6,8 @@ const {
   getUserByIdByAdmin,
   updateUserByAdmin,
   deleteUserByAdmin,
+  resetUserPasswordByAdmin,
+  changePasswordByUser,
 } = require("../controllers/user.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -22,5 +24,7 @@ router.get("/", getUsersByAdmin);
 router.get("/:id", getUserByIdByAdmin);
 router.patch("/:id", updateUserByAdmin);
 router.delete("/:id", deleteUserByAdmin);
+router.post("/:id/reset-password", resetUserPasswordByAdmin);
+router.post("/:id/change-password", changePasswordByUser);
 
 module.exports = router;

@@ -42,6 +42,13 @@ const getCourseById = async (id) => {
   });
 };
 
+const getCourseByTeacherId = async (teacher_id) => {
+  return prisma.course.findMany({
+    where: { teacher_id },
+    include: coursePublicInclude,
+  });
+};
+
 const findCourseByCode = async (code) => {
   return prisma.course.findFirst({
     where: { code },
@@ -71,4 +78,5 @@ module.exports = {
   findCourseByCode,
   updateCourseById,
   deleteCourseById,
+  getCourseByTeacherId,
 };

@@ -12,7 +12,7 @@ const {
 } = require("../services/quiz.service");
 const { getCourseById } = require("../services/course.service");
 
-const allowedRoles = ["ADMIN"];
+const allowedRoles = ["ADMIN", "TEACHER"];
 
 const getUniqueConflictMessage = (error) => {
   const target = error?.meta?.target;

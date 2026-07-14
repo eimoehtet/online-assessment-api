@@ -11,7 +11,6 @@ const prisma = require("../config/prisma");
 const bcrypt = require("bcrypt");
 
 const allowedRoles = ["ADMIN","TEACHER", "STUDENT"];
-// ...
 
 const parseEnrollmentId = (value) => {
   const parsed = Number(value);

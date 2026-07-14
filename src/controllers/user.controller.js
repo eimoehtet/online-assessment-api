@@ -292,11 +292,61 @@ const deleteUserByAdmin = async (req, res) => {
   }
 };
 
+const resetUserPasswordByAdmin = async (req, res) => {
+  try {
+    const userId = parseUserId(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: "Invalid user id." });
+    }
+
+    const defaultPassword = req.body.newPassword || "Default@123"; 
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    await updateUserById(userId, { password: hashedPassword });
+
+    return res.status(200).json({ message: "Password reset successfully." });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.status(500).json({ message: "Failed to reset password." });
+  }
+};
+
+const changePasswordByUser = async (req, res) => {
+  try {
+    const userId = parseUserId(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: "Invalid user id." });
+    }
+
+    const { newPassword } = req.body;
+    if (!newPassword) {
+      return res.status(400).json({ message: "New password is required." });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await updateUserById(userId, { password: hashedPassword });
+
+    return res.status(200).json({ message: "Password changed successfully." });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.status(500).json({ message: "Failed to change password." });
+  }
+};
+
 module.exports = {
   login,
   createUserByAdmin,
   getUsersByAdmin,
   getUserByIdByAdmin,
   updateUserByAdmin,
+  resetUserPasswordByAdmin,
+  changePasswordByUser,
   deleteUserByAdmin,
 };

@@ -72,6 +72,22 @@ const deleteUserById = async (id) => {
   });
 };
 
+const resetPassword = async(id, newPassword) => {
+  return prisma.user.update({
+    where: { id },
+    data: { password: newPassword }, 
+    select: userPublicSelect,
+  });
+}
+
+const changePassword = async(id, newPassword) => {
+  return prisma.user.update({
+    where: { id },
+    data: { password: newPassword }, 
+    select: userPublicSelect,
+  });
+}
+
 module.exports = {
   findUserByEmail,
   findUserByStudentId,
@@ -80,4 +96,6 @@ module.exports = {
   getUserById,
   updateUserById,
   deleteUserById,
+  resetPassword,
+  changePassword,
 };
