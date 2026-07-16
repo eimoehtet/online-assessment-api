@@ -7,6 +7,9 @@ const {
   getUserById,
   updateUserById,
   deleteUserById,
+  resetPassword,
+  changePassword,
+  getTeachers
 } = require("../services/user.service");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
@@ -191,6 +194,15 @@ const getUsersByAdmin = async (req, res) => {
   }
 };
 
+const getTeachersByAdmin = async (req, res) => {
+  try {
+    const teachersList = await getTeachers();
+    return res.status(200).json({ data: teachersList });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to fetch teachers." });
+  }
+};
+
 const getUserByIdByAdmin = async (req, res) => {
   try {
     const userId = parseUserId(req.params.id);
@@ -321,17 +333,18 @@ const changePasswordByUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid user id." });
     }
 
-    const { newPassword } = req.body;
-    if (!newPassword) {
-      return res.status(400).json({ message: "New password is required." });
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current and new passwords are required." });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await updateUserById(userId, { password: hashedPassword });
+    await changePassword(userId, currentPassword, hashedPassword);
 
     return res.status(200).json({ message: "Password changed successfully." });
   } catch (error) {
+    console.error("Error changing password:", error);
     if (error.code === "P2025") {
       return res.status(404).json({ message: "User not found." });
     }
@@ -349,4 +362,5 @@ module.exports = {
   resetUserPasswordByAdmin,
   changePasswordByUser,
   deleteUserByAdmin,
+  getTeachersByAdmin,
 };

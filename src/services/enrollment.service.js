@@ -29,6 +29,18 @@ const createEnrollment = async (course_id, student_id) => {
   });
 };
 
+const createBulkEnrollments = async (student_id, course_ids) => {
+  const enrollmentData = course_ids.map(course_id => ({
+    student_id,
+    course_id: parseInt(course_id, 10),
+  }));
+
+  return prisma.enrollment.createMany({
+    data: enrollmentData,
+    skipDuplicates: true,
+  });
+};
+
 const listEnrollments = async ({ skip, take, course_id, student_id }) => {
   const where = {};
   if (course_id) where.course_id = course_id;
@@ -78,6 +90,7 @@ const deleteEnrollmentById = async (id) => {
 
 module.exports = {
   createEnrollment,
+  createBulkEnrollments,
   listEnrollments,
   getEnrollmentById,
   updateEnrollment,

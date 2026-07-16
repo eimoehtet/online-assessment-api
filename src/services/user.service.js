@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const bcrypt = require("bcrypt");
 
 const userPublicSelect = {
   id: true,
@@ -50,6 +51,13 @@ const listUsers = async ({ skip, take, role }) => {
   return { items, total };
 };
 
+const getTeachers = async () => {
+  return prisma.user.findMany({
+    where: { role: "TEACHER" },
+    select: userPublicSelect,
+  });
+};
+
 const getUserById = async (id) => {
   return prisma.user.findUnique({
     where: { id },
@@ -80,12 +88,26 @@ const resetPassword = async(id, newPassword) => {
   });
 }
 
-const changePassword = async(id, newPassword) => {
+const changePassword = async(id, currentPassword, newPassword) => {
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+  if (!isPasswordValid) {
+    throw new Error("Current password is incorrect");
+  }
+
   return prisma.user.update({
     where: { id },
-    data: { password: newPassword }, 
+    data: { password: newPassword },
     select: userPublicSelect,
   });
+
 }
 
 module.exports = {
@@ -98,4 +120,5 @@ module.exports = {
   deleteUserById,
   resetPassword,
   changePassword,
+  getTeachers,
 };
