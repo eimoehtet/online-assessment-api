@@ -19,6 +19,14 @@ enum Status {
 	CLOSED
 }
 
+enum SubmissionStatus {
+	IN_PROGRESS
+	SUBMITTED
+	IN_REVIEW
+	GRADED
+	RELEASED
+}
+
 enum Question_Type {
 	MCQ
 	TRUE_FALSE
@@ -40,6 +48,13 @@ enum Gender {
 	FEMALE
 }
 
+enum Shift {
+	MORNING
+	AFTERNOON
+	EVENING
+}
+
+
 model User {
 	id            Int          @id @default(autoincrement())
 	name          String
@@ -54,6 +69,7 @@ model User {
 	date_of_birth DateTime     @db.Date
 	address       String
 	courses       Course[]
+	quizzes       Quiz[]
 	enrollments   Enrollment[]
 	submissions   Submission[]
 	createdAt     DateTime     @default(now())
@@ -65,8 +81,9 @@ model User {
 model Course {
 	id          Int          @id @default(autoincrement())
 	name        String
-	code        String       @unique
-	teacher_id  Int
+	code        String       
+	shift				Shift 		   @default(MORNING)
+	teacher_id  Int					
 	teacher     User         @relation(fields: [teacher_id], references: [id])
 	enrollments Enrollment[]
 	quizzes     Quiz[]
@@ -82,6 +99,10 @@ model Enrollment {
 	student    User   @relation(fields: [student_id], references: [id])
 	course_id  Int
 	course     Course @relation(fields: [course_id], references: [id])
+	shift      Shift  @default(MORNING)
+	createdAt  DateTime @default(now())
+	updatedAt  DateTime @default(now())
+
 
 	@@index([student_id])
 	@@index([course_id])
@@ -95,6 +116,8 @@ model Quiz {
 	title            String
 	time_limit       DateTime     @db.Timestamp(0)
 	course_id        Int
+	teacher_id  Int
+	teacher     User         @relation(fields: [teacher_id], references: [id])
 	course           Course       @relation(fields: [course_id], references: [id])
 	allowed_attempts Int          @default(1)
 	status           Status       @default(DRAFT)
@@ -104,6 +127,7 @@ model Quiz {
 	updatedAt        DateTime     @updatedAt
 
 	@@index([course_id])
+	@@index([teacher_id])
 	@@map("quizzes")
 }
 
@@ -144,6 +168,14 @@ model Submission {
 	quiz_id      Int
 	quiz         Quiz               @relation(fields: [quiz_id], references: [id])
 	total_score  Int?
+	auto_score   Int          @default(0)
+	manual_score Int          @default(0)
+	status       SubmissionStatus @default(IN_PROGRESS)
+	completed_at DateTime?    @db.Timestamp(0)
+	reviewed_by  Int?
+	reviewed_at  DateTime?    @db.Timestamp(0)
+	released_at  DateTime?    @db.Timestamp(0)
+	feedback     String?      @db.Text
 	submitted_at DateTime           @default(now()) @db.Timestamp(0)
 	answers      SubmissionAnswer[]
 
@@ -158,9 +190,11 @@ model SubmissionAnswer {
 	submission     Submission   @relation(fields: [submission_id], references: [id], onDelete: Cascade)
 	question_id    Int
 	question       Question     @relation(fields: [question_id], references: [id], onDelete: Cascade)
-	student_answer String?
+	student_answer String?       @db.Text
 	is_correct     Boolean?
 	points_awarded Int?
+	teacher_points_awarded Int?
+	teacher_feedback String? @db.Text
 	behaviorLogs   BehaviorLog[]
 
 	@@index([submission_id])

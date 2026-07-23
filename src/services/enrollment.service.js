@@ -22,17 +22,28 @@ const publicInclude = {
   },
 };
 
-const createEnrollment = async (course_id, student_id) => {
+const createEnrollment = async (courseId, studentId, shift) => {
+  console.log("Creating enrollment with courseId:", courseId, "studentId:", studentId, "shift:", shift);
+  if (!courseId) {
+    throw new Error("courseId is required.");
+  }
+  if (!studentId) {
+    throw new Error("studentId is required.");
+  }
+  if (!shift) {
+    throw new Error("shift is required.");
+  }
   return prisma.enrollment.create({
-    data: { course_id, student_id },
+    data: { course_id: parseInt(courseId, 10), student_id: studentId, shift },
     include: publicInclude,
   });
 };
 
-const createBulkEnrollments = async (student_id, course_ids) => {
-  const enrollmentData = course_ids.map(course_id => ({
-    student_id,
-    course_id: parseInt(course_id, 10),
+const createBulkEnrollments = async (studentId, courseIds, shift) => {
+  const enrollmentData = courseIds.map(courseId => ({
+    student_id: studentId,
+    course_id: parseInt(courseId, 10),
+    shift,
   }));
 
   return prisma.enrollment.createMany({
@@ -68,16 +79,28 @@ const getEnrollmentById = async (id) => {
 };
 
 const getEnrollmentsByCourse = async (courseId) => {
-  return prisma.enrollment.findMany({
+  const [items, total] = await Promise.all([
+    prisma.enrollment.findMany({
     where: { course_id: courseId },
+      include: publicInclude,
+    }),
+    prisma.enrollment.count({ where: { course_id: courseId } }),
+  ]);
+
+  return { items, total };
+};
+
+const getEnrollmentsByStudent = async (studentId) => {
+  return prisma.enrollment.findMany({
+    where: { student_id: studentId },
     include: publicInclude,
   });
 };
 
-const updateEnrollment = async (id, course_id, student_id) => {
+const updateEnrollment = async (id, course_id, student_id, shift) => {
   return prisma.enrollment.update({
     where: { id },
-    data: { course_id, student_id },
+    data: { course_id, student_id, shift },
     include: publicInclude,
   });
 };
@@ -96,4 +119,5 @@ module.exports = {
   updateEnrollment,
   deleteEnrollmentById,
   getEnrollmentsByCourse,
+  getEnrollmentsByStudent,
 };

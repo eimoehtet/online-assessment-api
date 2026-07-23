@@ -225,31 +225,6 @@ const validateQuestionPayload = ({
     }
   }
 
-  if (questionType === "SHORT_Q") {
-    if (!correctAnswer) {
-      return {
-        ok: false,
-        message: "SHORT_Q requires correct_answer.",
-      };
-    }
-
-    if (effectiveOptions && effectiveOptions.length > 0) {
-      return {
-        ok: false,
-        message: "SHORT_Q must not include options.",
-      };
-    }
-  }
-
-  if (questionType === "LONG_Q") {
-    if (effectiveOptions && effectiveOptions.length > 0) {
-      return {
-        ok: false,
-        message: "LONG_Q must not include options.",
-      };
-    }
-  }
-
   return {
     ok: true,
     value: {

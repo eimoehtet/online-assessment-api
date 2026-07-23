@@ -15,6 +15,10 @@ const {
   deleteBehaviorLogById,
   getBehaviorSummary,
   recalculateSubmissionTotalScore,
+  submitSubmission,
+  gradeSubmissionAnswer,
+  completeSubmissionReview,
+  releaseSubmissionScore,
 } = require("../services/submission.service");
 
 const allowedEventTypes = [
@@ -88,6 +92,24 @@ const canManageSubmission = (user, submission) => {
   return false;
 };
 
+const canReviewSubmission = (user, submission) =>
+  user.role === "ADMIN" ||
+  (user.role === "TEACHER" && submission.quiz?.course?.teacher_id === user.id);
+
+const hideUnreleasedScores = (submission) => {
+  if (submission.status === "RELEASED") return submission;
+  const { total_score, auto_score, manual_score, feedback, answers, ...safeSubmission } = submission;
+  return {
+    ...safeSubmission,
+    ...(answers ? { answers: hideUnreleasedAnswerScores(answers, false) } : {}),
+  };
+};
+
+const hideUnreleasedAnswerScores = (answers, isReleased) => {
+  if (isReleased) return answers;
+  return answers.map(({ is_correct, points_awarded, teacher_points_awarded, teacher_feedback, ...answer }) => answer);
+};
+
 const listSubmissionsHandler = async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
   const quizId =
@@ -121,7 +143,7 @@ const listSubmissionsHandler = async (req, res) => {
     });
 
     return res.status(200).json({
-      data: items,
+      data: req.user.role === "STUDENT" ? items.map(hideUnreleasedScores) : items,
       meta: {
         page,
         limit,
@@ -153,7 +175,9 @@ const getSubmissionByIdHandler = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    return res.status(200).json(submission);
+    return res.status(200).json(
+      req.user.role === "STUDENT" ? hideUnreleasedScores(submission) : submission,
+    );
   } catch (error) {
     console.error("Error fetching submission:", error);
     return res.status(500).json({ message: "Internal server error." });
@@ -176,6 +200,10 @@ const deleteSubmissionByIdHandler = async (req, res) => {
 
     if (!canManageSubmission(req.user, submission)) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (req.user.role === "STUDENT" && submission.status !== "IN_PROGRESS") {
+      return res.status(409).json({ message: "This submission has already been submitted and cannot be changed." });
     }
 
     await deleteSubmissionById(submissionId);
@@ -270,7 +298,31 @@ const submitAnswer = async (req, res) => {
       return res.status(404).json({ message: error.message });
     }
 
+    if (error.code === "SUBMISSION_NOT_EDITABLE") {
+      return res.status(409).json({ message: error.message });
+    }
+
     console.error("Error submitting answer:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+const finishSubmission = async (req, res) => {
+  const submissionId = parsePositiveInt(req.params.id);
+  if (!submissionId) return res.status(400).json({ message: "Invalid submission id." });
+  try {
+    const submission = await getSubmissionById(submissionId);
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+    assertStudentOwnership(submission, req.user.id);
+    const completed = await submitSubmission({
+      submission_id: submissionId,
+      answers: req.body.answers,
+    });
+    return res.status(200).json(completed);
+  } catch (error) {
+    if (error.code === "FORBIDDEN_SUBMISSION") return res.status(403).json({ message: error.message });
+    if (error.code === "SUBMISSION_NOT_EDITABLE") return res.status(409).json({ message: error.message });
+    console.error("Error finishing submission:", error);
     return res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -296,9 +348,68 @@ const listSubmissionAnswersHandler = async (req, res) => {
     const answers = await listSubmissionAnswers({
       submission_id: submissionId,
     });
-    return res.status(200).json(answers);
+    return res.status(200).json(
+      req.user.role === "STUDENT"
+        ? hideUnreleasedAnswerScores(answers, submission.status === "RELEASED")
+        : answers,
+    );
   } catch (error) {
     console.error("Error listing submission answers:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+const gradeSubmissionAnswerHandler = async (req, res) => {
+  const submissionId = parsePositiveInt(req.params.id);
+  const answerId = parsePositiveInt(req.params.answerId);
+  const score = Number(req.body.teacher_points_awarded);
+  if (!submissionId || !answerId || !Number.isInteger(score)) {
+    return res.status(400).json({ message: "A whole-number teacher_points_awarded is required." });
+  }
+  try {
+    const submission = await getSubmissionById(submissionId);
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+    if (!canReviewSubmission(req.user, submission)) return res.status(403).json({ message: "Forbidden" });
+    const existingAnswer = await getSubmissionAnswerById(answerId);
+    if (!existingAnswer || existingAnswer.submission_id !== submissionId) return res.status(404).json({ message: "Submission answer not found." });
+    const answer = await gradeSubmissionAnswer({ answer_id: answerId, teacher_points_awarded: score, teacher_feedback: req.body.teacher_feedback });
+    await recalculateSubmissionTotalScore(submissionId);
+    return res.status(200).json(answer);
+  } catch (error) {
+    if (["INVALID_MANUAL_SCORE", "NOT_MANUAL_QUESTION"].includes(error.code)) return res.status(400).json({ message: error.message });
+    if (error.code === "SUBMISSION_NOT_READY_FOR_REVIEW") return res.status(409).json({ message: error.message });
+    console.error("Error grading answer:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+const completeSubmissionReviewHandler = async (req, res) => {
+  const submissionId = parsePositiveInt(req.params.id);
+  if (!submissionId) return res.status(400).json({ message: "Invalid submission id." });
+  try {
+    const submission = await getSubmissionById(submissionId);
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+    if (!canReviewSubmission(req.user, submission)) return res.status(403).json({ message: "Forbidden" });
+    const reviewed = await completeSubmissionReview({ submission_id: submissionId, reviewed_by: req.user.id, feedback: req.body.feedback });
+    return res.status(200).json(reviewed);
+  } catch (error) {
+    if (["MANUAL_GRADING_INCOMPLETE", "SUBMISSION_NOT_READY_FOR_REVIEW"].includes(error.code)) return res.status(409).json({ message: error.message });
+    console.error("Error completing review:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+const releaseSubmissionScoreHandler = async (req, res) => {
+  const submissionId = parsePositiveInt(req.params.id);
+  if (!submissionId) return res.status(400).json({ message: "Invalid submission id." });
+  try {
+    const submission = await getSubmissionById(submissionId);
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+    if (!canReviewSubmission(req.user, submission)) return res.status(403).json({ message: "Forbidden" });
+    return res.status(200).json(await releaseSubmissionScore(submissionId));
+  } catch (error) {
+    if (error.code === "SUBMISSION_NOT_GRADED") return res.status(409).json({ message: error.message });
+    console.error("Error releasing score:", error);
     return res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -358,6 +469,10 @@ const updateSubmissionAnswerByIdHandler = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    if (req.user.role === "STUDENT" && submission.status !== "IN_PROGRESS") {
+      return res.status(409).json({ message: "This submission has already been submitted and cannot be changed." });
+    }
+
     const existingAnswer = await getSubmissionAnswerById(answerId);
     if (!existingAnswer || existingAnswer.submission_id !== submissionId) {
       return res.status(404).json({ message: "Submission answer not found." });
@@ -404,6 +519,10 @@ const deleteSubmissionAnswerByIdHandler = async (req, res) => {
 
     if (!canManageSubmission(req.user, submission)) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (req.user.role === "STUDENT" && submission.status !== "IN_PROGRESS") {
+      return res.status(409).json({ message: "This submission has already been submitted and cannot be changed." });
     }
 
     const existingAnswer = await getSubmissionAnswerById(answerId);
@@ -621,12 +740,16 @@ module.exports = {
   allowedEventTypes,
   listSubmissionsHandler,
   startSubmission,
+  finishSubmission,
   getSubmissionByIdHandler,
   deleteSubmissionByIdHandler,
   submitAnswer,
   listSubmissionAnswersHandler,
   getSubmissionAnswerByIdHandler,
   updateSubmissionAnswerByIdHandler,
+  gradeSubmissionAnswerHandler,
+  completeSubmissionReviewHandler,
+  releaseSubmissionScoreHandler,
   deleteSubmissionAnswerByIdHandler,
   recordBehaviorLog,
   getSubmissionBehaviorSummary,

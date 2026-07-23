@@ -6,6 +6,7 @@ const {
   updateEnrollment,
   deleteEnrollmentById,
   getEnrollmentsByCourse,
+  getEnrollmentsByStudent,
   bulkEnrollment,
 } = require('../controllers/enrollment.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
@@ -20,7 +21,8 @@ router.post('/', createEnrollment);
 router.post('/bulk', authorizeRole('ADMIN'), bulkEnrollment);
 router.get('/', listEnrollments);
 router.get('/:id', getEnrollmentById);
-router.get('/courses/:id', getEnrollmentsByCourse); 
+router.get('/courses/:id', getEnrollmentsByCourse);
+router.get('/students/:id', getEnrollmentsByStudent);
 router.put('/:id', updateEnrollment);
 router.delete('/:id', deleteEnrollmentById);
 

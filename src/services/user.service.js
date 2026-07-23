@@ -51,11 +51,36 @@ const listUsers = async ({ skip, take, role }) => {
   return { items, total };
 };
 
-const getTeachers = async () => {
-  return prisma.user.findMany({
-    where: { role: "TEACHER" },
-    select: userPublicSelect,
-  });
+const getTeachers = async ({ skip, take, role }) => {
+  const where = { role: "TEACHER" };
+
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { id: "asc" },
+      select: userPublicSelect,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  return { items, total };
+};
+
+const getStudents = async ({ skip, take, role }) => {
+  const where = { role: "STUDENT" };
+
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { id: "asc" },
+      select: userPublicSelect,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  return { items, total };
 };
 
 const getUserById = async (id) => {
@@ -121,4 +146,5 @@ module.exports = {
   resetPassword,
   changePassword,
   getTeachers,
+  getStudents,
 };

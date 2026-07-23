@@ -24,10 +24,6 @@ const getUniqueConflictMessage = (error) => {
   );
   const combined = normalizedTokens.join(" ");
 
-  if (combined.includes("code")) {
-    return "Course code already in use.";
-  }
-
   return "Duplicate value already exists.";
 };
 
@@ -67,22 +63,17 @@ const getPagination = (query) => {
 
 const createCourse = async (req, res) => {
   try {
-    const { name, code, teacher_id } = req.body;
+    const { name, code, shift, teacher_id } = req.body;
 
-    if (!name || !code || teacher_id === undefined) {
+    if (!name || !code || !shift || teacher_id === undefined) {
       return res.status(400).json({
-        message: "Name, code, and teacher_id are required.",
+        message: "Name, code, shift, and teacher_id are required.",
       });
     }
 
     const teacherId = parseTeacherId(teacher_id);
     if (!teacherId) {
       return res.status(400).json({ message: "Invalid teacher_id." });
-    }
-
-    const existingCourse = await findCourseByCode(code);
-    if (existingCourse) {
-      return res.status(409).json({ message: "Course code already in use." });
     }
 
     const teacher = await getUserById(teacherId);
@@ -99,6 +90,7 @@ const createCourse = async (req, res) => {
     const course = await createCourseRecord({
       name,
       code,
+      shift,
       teacher_id: teacherId,
     });
 

@@ -196,6 +196,14 @@ const createSubmission = async ({ student_id, quiz_id }) => {
   });
 };
 
+const assertSubmissionEditable = (submission) => {
+  if (submission.status !== "IN_PROGRESS") {
+    const error = new Error("This submission has already been submitted and cannot be changed.");
+    error.code = "SUBMISSION_NOT_EDITABLE";
+    throw error;
+  }
+};
+
 const getSubmissionById = async (id) => {
   return prisma.submission.findUnique({
     where: { id },
@@ -297,6 +305,7 @@ const upsertAnswer = async ({ submission_id, question_id, student_answer }) => {
     select: {
       id: true,
       quiz_id: true,
+      status: true,
     },
   });
 
@@ -305,6 +314,8 @@ const upsertAnswer = async ({ submission_id, question_id, student_answer }) => {
     error.code = "SUBMISSION_NOT_FOUND";
     throw error;
   }
+
+  assertSubmissionEditable(submission);
 
   const question = await getQuestionForSubmission({
     quiz_id: submission.quiz_id,
@@ -572,21 +583,144 @@ const getBehaviorSummary = async ({ submission_id }) => {
 };
 
 const recalculateSubmissionTotalScore = async (submission_id) => {
-  const aggregate = await prisma.submissionAnswer.aggregate({
-    where: {
-      submission_id,
-    },
-    _sum: {
-      points_awarded: true,
-    },
-  });
+  const [automatic, manual] = await Promise.all([
+    prisma.submissionAnswer.aggregate({
+      where: { submission_id, question: { question_type: { in: ["MCQ", "TRUE_FALSE"] } } },
+      _sum: { points_awarded: true },
+    }),
+    prisma.submissionAnswer.aggregate({
+      where: { submission_id, question: { question_type: { in: ["SHORT_Q", "LONG_Q"] } } },
+      _sum: { teacher_points_awarded: true },
+    }),
+  ]);
 
   return prisma.submission.update({
     where: { id: submission_id },
     data: {
-      total_score: aggregate._sum.points_awarded || 0,
+      auto_score: automatic._sum.points_awarded || 0,
+      manual_score: manual._sum.teacher_points_awarded || 0,
     },
   });
+};
+
+const submitSubmission = async ({ submission_id, answers = [] }) => {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submission_id },
+    select: { id: true, quiz_id: true, status: true },
+  });
+
+  if (!submission) {
+    const error = new Error("Submission not found.");
+    error.code = "SUBMISSION_NOT_FOUND";
+    throw error;
+  }
+  assertSubmissionEditable(submission);
+  const questions = await prisma.question.findMany({
+    where: { quiz_id: submission.quiz_id },
+    include: { options: { select: { option_text: true, is_correct: true } } },
+  });
+  const submittedAnswers = new Map(
+    Array.isArray(answers)
+      ? answers
+          .filter((answer) => Number.isInteger(Number(answer.question_id)))
+          .map((answer) => [Number(answer.question_id), answer.student_answer ?? null])
+      : [],
+  );
+  await prisma.$transaction(
+    questions.map((question) => {
+      const hasFinalAnswer = submittedAnswers.has(question.id);
+      const student_answer = submittedAnswers.get(question.id);
+      const grading = hasFinalAnswer ? evaluateAnswer(question, student_answer) : null;
+      return prisma.submissionAnswer.upsert({
+        where: { submission_id_question_id: { submission_id, question_id: question.id } },
+        update: hasFinalAnswer
+          ? { student_answer, is_correct: grading.is_correct, points_awarded: grading.points_awarded }
+          : {},
+        create: {
+          submission_id,
+          question_id: question.id,
+          student_answer: hasFinalAnswer ? student_answer : null,
+          is_correct: grading?.is_correct ?? null,
+          points_awarded: grading?.points_awarded ?? null,
+        },
+      });
+    }),
+  );
+  await recalculateSubmissionTotalScore(submission_id);
+  return prisma.submission.update({
+    where: { id: submission_id },
+    data: { status: "SUBMITTED", completed_at: new Date(), total_score: null },
+  });
+};
+
+const gradeSubmissionAnswer = async ({ answer_id, teacher_points_awarded, teacher_feedback }) => {
+  const answer = await prisma.submissionAnswer.findUnique({
+    where: { id: answer_id },
+    include: { question: { select: { points: true, question_type: true } }, submission: { select: { status: true } } },
+  });
+  if (!answer) {
+    const error = new Error("Submission answer not found.");
+    error.code = "SUBMISSION_ANSWER_NOT_FOUND";
+    throw error;
+  }
+  if (!["SUBMITTED", "IN_REVIEW", "GRADED"].includes(answer.submission.status)) {
+    const error = new Error("This submission is not ready for review.");
+    error.code = "SUBMISSION_NOT_READY_FOR_REVIEW";
+    throw error;
+  }
+  if (!["SHORT_Q", "LONG_Q"].includes(answer.question.question_type)) {
+    const error = new Error("Only written answers require manual grading.");
+    error.code = "NOT_MANUAL_QUESTION";
+    throw error;
+  }
+  if (!Number.isInteger(teacher_points_awarded) || teacher_points_awarded < 0 || teacher_points_awarded > (answer.question.points || 0)) {
+    const error = new Error(`Score must be a whole number between 0 and ${answer.question.points || 0}.`);
+    error.code = "INVALID_MANUAL_SCORE";
+    throw error;
+  }
+  return prisma.submissionAnswer.update({
+    where: { id: answer_id },
+    data: { teacher_points_awarded, teacher_feedback: teacher_feedback ?? null },
+    include: { question: { select: { id: true, question_text: true, question_type: true, points: true } } },
+  });
+};
+
+const completeSubmissionReview = async ({ submission_id, reviewed_by, feedback }) => {
+  const submission = await prisma.submission.findUnique({ where: { id: submission_id }, select: { status: true } });
+  if (!submission || !["SUBMITTED", "IN_REVIEW", "GRADED"].includes(submission.status)) {
+    const error = new Error("This submission is not ready for review.");
+    error.code = "SUBMISSION_NOT_READY_FOR_REVIEW";
+    throw error;
+  }
+  const ungraded = await prisma.submissionAnswer.count({
+    where: { submission_id, question: { question_type: { in: ["SHORT_Q", "LONG_Q"] } }, teacher_points_awarded: null },
+  });
+  if (ungraded > 0) {
+    const error = new Error("Every short and long answer must receive a score before completing review.");
+    error.code = "MANUAL_GRADING_INCOMPLETE";
+    throw error;
+  }
+  const scores = await recalculateSubmissionTotalScore(submission_id);
+  return prisma.submission.update({
+    where: { id: submission_id },
+    data: {
+      status: "GRADED",
+      total_score: scores.auto_score + scores.manual_score,
+      reviewed_by,
+      reviewed_at: new Date(),
+      feedback: feedback ?? null,
+    },
+  });
+};
+
+const releaseSubmissionScore = async (submission_id) => {
+  const submission = await prisma.submission.findUnique({ where: { id: submission_id }, select: { status: true } });
+  if (!submission || submission.status !== "GRADED") {
+    const error = new Error("A submission must be fully graded before its score can be released.");
+    error.code = "SUBMISSION_NOT_GRADED";
+    throw error;
+  }
+  return prisma.submission.update({ where: { id: submission_id }, data: { status: "RELEASED", released_at: new Date() } });
 };
 
 module.exports = {
@@ -595,6 +729,7 @@ module.exports = {
   listSubmissions,
   deleteSubmissionById,
   assertStudentOwnership,
+  assertSubmissionEditable,
   upsertAnswer,
   listSubmissionAnswers,
   getSubmissionAnswerById,
@@ -606,4 +741,8 @@ module.exports = {
   deleteBehaviorLogById,
   getBehaviorSummary,
   recalculateSubmissionTotalScore,
+  submitSubmission,
+  gradeSubmissionAnswer,
+  completeSubmissionReview,
+  releaseSubmissionScore,
 };

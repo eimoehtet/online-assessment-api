@@ -1,12 +1,15 @@
 const {
   createEnrollment: createEnrollmentRecord,
+  createBulkEnrollments,
   listEnrollments: listEnrollmentRecords,
   getEnrollmentById: getEnrollmentByIdRecord,
   updateEnrollment: updateEnrollmentRecord,
   deleteEnrollmentById: deleteEnrollmentRecord,
+  getEnrollmentsByCourse: getEnrollmentsByCourseRecord,
+  getEnrollmentsByStudent: getEnrollmentsByStudentRecord,
 } = require("../services/enrollment.service");
 const { getCourseById } = require("../services/course.service");
-const { getUserById, findUserByStudentId, createUser } = require("../services/user.service");
+const { getUserById, getUserIdByStudentID, findUserByStudentId, findUserByEmail, createUser } = require("../services/user.service");
 const prisma = require("../config/prisma");
 const bcrypt = require("bcrypt");
 
@@ -77,48 +80,31 @@ const getUniqueConflictMessage = (error) => {
 };
 
 const createEnrollment = async (req, res) => {
-  const courseId = parseCourseId(req.body.course_id);
-  const requestedStudentId = parseUserId(req.body.student_id);
+  const { courseId, studentId, shift} = req.body;
 
-  if (!courseId || !requestedStudentId) {
-    return res
-      .status(400)
-      .json({ message: "Valid course_id and student_id are required." });
+  if (!courseId) {
+    return res.status(400).json({ message: "courseId is required." });
   }
-
-  const studentId =
-    req.user.role === "STUDENT" ? req.user.id : requestedStudentId;
-
-  if (req.user.role === "STUDENT" && studentId !== requestedStudentId) {
-    return res
-      .status(403)
-      .json({ message: "Students can only create their own enrollment." });
+  if (!studentId) {
+    return res.status(400).json({ message: "studentId is required." });
   }
-
+  if (!shift) {
+    return res.status(400).json({ message: "shift is required." });
+  }
   try {
-    const course = await getCourseById(courseId);
-    if (!course) {
-      return res.status(404).json({ message: "Course not found." });
-    }
-
-    const student = await getUserById(studentId);
+    const student = await findUserByStudentId(studentId);
     if (!student || student.role !== "STUDENT") {
-      return res
-        .status(404)
-        .json({ message: "Student not found or invalid role." });
+      return res.status(404).json({ message: "Student not found or invalid role." });
     }
-
-    const enrollment = await createEnrollmentRecord(courseId, studentId);
-    return res.status(201).json({
-      message: "Enrollment created successfully.",
-      enrollment,
-    });
+    const student_id = student.id;
+    console.log("ID of student to enroll:", student_id);
+    const enrollment = await createEnrollmentRecord( courseId, student_id, shift );
+    return res.status(201).json(enrollment);
   } catch (error) {
-    if (error.code === "P2002") {
-      const message = getUniqueConflictMessage(error);
-      return res.status(409).json({ message });
-    }
     console.error("Error creating enrollment:", error);
+    if (error.code === 'P2002') {
+      return res.status(409).json({ message: getUniqueConflictMessage(error) });
+    }
     return res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -210,11 +196,7 @@ const getEnrollmentsByCourse = async (req, res) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
 
-    const { items, total } = await listEnrollmentRecords({
-      skip,
-      take: limit,
-      course_id: courseId,
-    });
+    const { items, total } = await getEnrollmentsByCourseRecord(courseId);
 
     return res.status(200).json({
       data: items,
@@ -227,6 +209,22 @@ const getEnrollmentsByCourse = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching enrollments by course:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+const getEnrollmentsByStudent = async (req, res) => {
+  const studentId = parseUserId(req.params.id);
+  if (!studentId) {
+    return res.status(400).json({ message: "Invalid student ID." });
+  }
+  try {
+    const items = await getEnrollmentsByStudentRecord(studentId);
+    return res.status(200).json({
+      data: items,
+    });
+  } catch (error) {
+    console.error("Error fetching enrollments by student:", error);
     return res.status(500).json({ message: "Internal server error." });
   }
 };
@@ -399,4 +397,5 @@ module.exports = {
   parseEnrollmentId,
   getPagination,
   getEnrollmentsByCourse,
+  getEnrollmentsByStudent,
 };

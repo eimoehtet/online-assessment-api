@@ -4,12 +4,16 @@ const authorizeRole = require("../middlewares/authorize-role.middleware");
 const {
   listSubmissionsHandler,
   startSubmission,
+  finishSubmission,
   getSubmissionByIdHandler,
   deleteSubmissionByIdHandler,
   submitAnswer,
   listSubmissionAnswersHandler,
   getSubmissionAnswerByIdHandler,
   updateSubmissionAnswerByIdHandler,
+  gradeSubmissionAnswerHandler,
+  completeSubmissionReviewHandler,
+  releaseSubmissionScoreHandler,
   deleteSubmissionAnswerByIdHandler,
   recordBehaviorLog,
   getSubmissionBehaviorSummary,
@@ -28,6 +32,7 @@ router.get(
   listSubmissionsHandler,
 );
 router.post("/", authorizeRole("STUDENT"), startSubmission);
+router.post("/:id/submit", authorizeRole("STUDENT"), finishSubmission);
 router.get(
   "/:id",
   authorizeRole("ADMIN", "TEACHER", "STUDENT"),
@@ -54,6 +59,21 @@ router.patch(
   "/:id/answers/:answerId",
   authorizeRole("ADMIN", "TEACHER", "STUDENT"),
   updateSubmissionAnswerByIdHandler,
+);
+router.patch(
+  "/:id/answers/:answerId/grade",
+  authorizeRole("ADMIN", "TEACHER"),
+  gradeSubmissionAnswerHandler,
+);
+router.post(
+  "/:id/complete-review",
+  authorizeRole("ADMIN", "TEACHER"),
+  completeSubmissionReviewHandler,
+);
+router.post(
+  "/:id/release",
+  authorizeRole("ADMIN", "TEACHER"),
+  releaseSubmissionScoreHandler,
 );
 router.delete(
   "/:id/answers/:answerId",

@@ -9,7 +9,8 @@ const {
   deleteUserById,
   resetPassword,
   changePassword,
-  getTeachers
+  getTeachers,
+  getStudents,
 } = require("../services/user.service");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
@@ -196,10 +197,47 @@ const getUsersByAdmin = async (req, res) => {
 
 const getTeachersByAdmin = async (req, res) => {
   try {
-    const teachersList = await getTeachers();
-    return res.status(200).json({ data: teachersList });
+    const { page, limit, skip } = getPagination(req.query);
+    const role = req.query.role;
+    if (role && role !== "TEACHER") {
+      return res.status(400).json({ message: "Invalid role filter for teachers." });
+    }
+    const { items, total } = await getTeachers({ skip, take: limit });
+    return res.status(200).json({
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (_error) {
     return res.status(500).json({ message: "Failed to fetch teachers." });
+  }
+};
+
+const getStudentsByAdmin = async (req, res) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const role = req.query.role;
+
+    if (role && role !== "STUDENT") {
+      return res.status(400).json({ message: "Invalid role filter for students." });
+    }
+
+    const { items, total } = await getStudents({ skip, take: limit });
+    return res.status(200).json({
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to fetch students." });
   }
 };
 
@@ -363,4 +401,5 @@ module.exports = {
   changePasswordByUser,
   deleteUserByAdmin,
   getTeachersByAdmin,
+  getStudentsByAdmin,
 };

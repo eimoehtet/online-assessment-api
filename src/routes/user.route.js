@@ -9,6 +9,7 @@ const {
   resetUserPasswordByAdmin,
   changePasswordByUser,
   getTeachersByAdmin,
+  getStudentsByAdmin,
 } = require("../controllers/user.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -22,6 +23,7 @@ router.use(authorizeRole("ADMIN", "TEACHER", "STUDENT"));
 
 router.post("/", createUserByAdmin);
 router.get("/", getUsersByAdmin);
+router.get("/students", getStudentsByAdmin);
 router.get("/teachers", getTeachersByAdmin);
 router.get("/:id", getUserByIdByAdmin);
 router.patch("/:id", updateUserByAdmin);
