@@ -55,6 +55,8 @@ enum Shift {
 }
 
 
+
+
 model User {
 	id            Int          @id @default(autoincrement())
 	name          String
@@ -72,6 +74,7 @@ model User {
 	quizzes       Quiz[]
 	enrollments   Enrollment[]
 	submissions   Submission[]
+	status				Int          @default(1)
 	createdAt     DateTime     @default(now())
 	updatedAt     DateTime     @updatedAt
 
@@ -114,6 +117,8 @@ model Enrollment {
 model Quiz {
 	id               Int          @id @default(autoincrement())
 	title            String
+	start_date       DateTime     @default(now()) @db.Timestamp(0)
+	end_date         DateTime     @db.Timestamp(0) @default(now())
 	time_limit       DateTime     @db.Timestamp(0)
 	course_id        Int
 	teacher_id  Int
@@ -123,6 +128,7 @@ model Quiz {
 	status           Status       @default(DRAFT)
 	questions        Question[]
 	submissions      Submission[]
+	publishedAt			 DateTime     @db.Timestamp(0) @default(now())
 	createdAt        DateTime     @default(now())
 	updatedAt        DateTime     @updatedAt
 

@@ -10,6 +10,7 @@ const {
   changePasswordByUser,
   getTeachersByAdmin,
   getStudentsByAdmin,
+  toggleUserStatusByAdmin,
 } = require("../controllers/user.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -30,5 +31,6 @@ router.patch("/:id", updateUserByAdmin);
 router.delete("/:id", deleteUserByAdmin);
 router.post("/:id/reset-password", resetUserPasswordByAdmin);
 router.post("/:id/change-password", changePasswordByUser, authorizeRole("ADMIN", "TEACHER", "STUDENT"));
+router.post("/:id/toggle-status", authorizeRole("ADMIN"), toggleUserStatusByAdmin);
 
 module.exports = router;

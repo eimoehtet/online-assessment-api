@@ -8,6 +8,13 @@ const publicInclude = {
       code: true,
     },
   },
+  teacher: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
 };
 
 const createQuiz = async (data) => {
@@ -29,6 +36,21 @@ const listQuizzes = async ({ skip, take, course_id }) => {
       include: publicInclude,
     }),
     prisma.quiz.count({ where }),
+  ]);
+
+  return { items, total };
+};
+
+const getQuizzesByTeacherId = async (teacherId, { skip, take }) => {
+  const [items, total] = await Promise.all([
+    prisma.quiz.findMany({
+      where: { teacher_id: teacherId },
+      skip,
+      take,
+      orderBy: { id: "asc" },
+      include: publicInclude,
+    }),
+    prisma.quiz.count({ where: { teacher_id: teacherId } }),
   ]);
 
   return { items, total };
@@ -137,4 +159,5 @@ module.exports = {
   getQuestionById,
   updateQuestionById,
   deleteQuestionById,
+  getQuizzesByTeacherId,
 };

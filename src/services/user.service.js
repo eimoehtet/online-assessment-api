@@ -13,6 +13,7 @@ const userPublicSelect = {
   address: true,
   createdAt: true,
   updatedAt: true,
+  status: true,
 };
 
 const findUserByEmail = async (email) => {
@@ -135,6 +136,24 @@ const changePassword = async(id, currentPassword, newPassword) => {
 
 }
 
+const toggleUserStatus = async (id) => {
+  console.log("Toggling status for user ID:", id); // Debugging line
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const newStatus = user?.status === 1 ? 0 : 1;
+  console.log(`Current status: ${user.status}, New status: ${newStatus}`); // Debugging line
+  return prisma.user.update({
+    where: { id },
+    data: { status: newStatus },
+  });
+};
+
 module.exports = {
   findUserByEmail,
   findUserByStudentId,
@@ -147,4 +166,5 @@ module.exports = {
   changePassword,
   getTeachers,
   getStudents,
+  toggleUserStatus,
 };

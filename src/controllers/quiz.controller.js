@@ -9,6 +9,7 @@ const {
   getQuestionById: getQuestionByIdRecord,
   updateQuestionById: updateQuestionByIdRecord,
   deleteQuestionById: deleteQuestionByIdRecord,
+  getQuizzesByTeacherId: getQuizzesByTeacherIdRecord,
 } = require("../services/quiz.service");
 const { getCourseById } = require("../services/course.service");
 
@@ -313,6 +314,34 @@ const listQuizzes = async (req, res) => {
   }
 };
 
+const getQuizzesByTeacherId = async (req, res) => {
+  const teacherId = req.user?.id;
+
+  if (!teacherId) {
+    return res.status(400).json({ message: "Teacher ID is required." });
+  }
+
+  try {
+    const { page, skip, limit } = getPagination(req.query);
+    const { items, total } = await getQuizzesByTeacherIdRecord(teacherId, { skip, take: limit });
+
+    console.log("items:", items);
+
+    return res.status(200).json({
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error listing quizzes for teacher:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 const getQuizById = async (req, res) => {
   const id = parseQuizId(req.params.id);
 
@@ -568,4 +597,5 @@ module.exports = {
   getQuestionById,
   updateQuestionById,
   deleteQuestionById,
+  getQuizzesByTeacherId,
 };

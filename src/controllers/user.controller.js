@@ -11,6 +11,7 @@ const {
   changePassword,
   getTeachers,
   getStudents,
+  toggleUserStatus,
 } = require("../services/user.service");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
@@ -391,6 +392,28 @@ const changePasswordByUser = async (req, res) => {
   }
 };
 
+const toggleUserStatusByAdmin = async (req, res) => {
+  try {
+    const userId = parseUserId(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: "Invalid user id." });
+    }
+
+    const changed = await toggleUserStatus(userId);
+
+    return res.status(200).json({
+      message: `User ${changed.status ? "activated" : "deactivated"} successfully.`,
+      status: changed.status,
+    });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.status(500).json({ message: "Failed to toggle user status." });
+  }
+};
+
 module.exports = {
   login,
   createUserByAdmin,
@@ -402,4 +425,5 @@ module.exports = {
   deleteUserByAdmin,
   getTeachersByAdmin,
   getStudentsByAdmin,
+  toggleUserStatusByAdmin,
 };

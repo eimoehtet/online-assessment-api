@@ -2,6 +2,7 @@ const { Router } = require("express");
 const {
   createQuiz,
   listQuizzes,
+  getQuizzesByTeacherId,
   getQuizById,
   updateQuizById,
   deleteQuizById,
@@ -20,6 +21,7 @@ router.use(authMiddleware);
 
 router.post("/", authorizeRole("ADMIN", "TEACHER"), createQuiz);
 router.get("/", authorizeRole("ADMIN", "TEACHER", "STUDENT"), listQuizzes);
+router.get("/teacher/:teacherId", authorizeRole("TEACHER"), getQuizzesByTeacherId);
 router.get("/:id", authorizeRole("ADMIN", "TEACHER", "STUDENT"), getQuizById);
 router.put("/:id", authorizeRole("ADMIN", "TEACHER"), updateQuizById);
 router.delete("/:id", authorizeRole("ADMIN", "TEACHER"), deleteQuizById);
