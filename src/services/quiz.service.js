@@ -148,6 +148,34 @@ const deleteQuestionById = async (id) => {
   });
 };
 
+const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId) => {
+  // find the course_id from the quizId and teacherId
+  const course = await prisma.course.findFirst({
+    where: {
+      quizzes: {
+        some: {
+          id: parseInt(quizId, 10),
+          teacher_id: parseInt(teacherId, 10),
+        },
+      },
+    },
+  });
+
+  if (!course) {
+    throw new Error("Course not found for the given quizId and teacherId.");
+  }
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { course_id: course.id },
+    include: {
+      student: true,
+    },
+  });
+
+  return enrollments.map(enrollment => enrollment.student);
+};
+
+
 module.exports = {
   createQuiz,
   listQuizzes,
@@ -160,4 +188,5 @@ module.exports = {
   updateQuestionById,
   deleteQuestionById,
   getQuizzesByTeacherId,
+  getStudentsByQuizIdAndTeacherId,
 };

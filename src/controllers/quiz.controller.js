@@ -10,6 +10,7 @@ const {
   updateQuestionById: updateQuestionByIdRecord,
   deleteQuestionById: deleteQuestionByIdRecord,
   getQuizzesByTeacherId: getQuizzesByTeacherIdRecord,
+  getStudentsByQuizIdAndTeacherId: getStudentsByQuizIdAndTeacherIdRecord,
 } = require("../services/quiz.service");
 const { getCourseById } = require("../services/course.service");
 
@@ -580,6 +581,34 @@ const deleteQuestionById = async (req, res) => {
   }
 };
 
+const getStudentsByQuizIdAndTeacherId = async (req, res) => {
+  console.log ("Params received:", req.params);
+  const quizId = parseQuizId(req.params.id);
+  if (!quizId) {
+    return res.status(400).json({ message: "Invalid quiz ID." });
+  }
+
+  const teacherId = req.params.teacherId;
+
+  const { page, skip, limit } = getPagination(req.query);
+
+  try {
+    const students = await getStudentsByQuizIdAndTeacherIdRecord(quizId, teacherId, { skip, take: limit });
+    return res.status(200).json({
+      data: students,
+      meta: {
+        page,
+        limit,
+        total: students.length,
+        totalPages: Math.ceil(students.length / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching students by quiz ID and teacher ID:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 module.exports = {
   allowedRoles,
   getUniqueConflictMessage,
@@ -598,4 +627,5 @@ module.exports = {
   updateQuestionById,
   deleteQuestionById,
   getQuizzesByTeacherId,
+  getStudentsByQuizIdAndTeacherId,
 };

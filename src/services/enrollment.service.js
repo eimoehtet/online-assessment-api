@@ -119,5 +119,5 @@ module.exports = {
   updateEnrollment,
   deleteEnrollmentById,
   getEnrollmentsByCourse,
-  getEnrollmentsByStudent,
+  getEnrollmentsByStudent
 };

@@ -11,6 +11,7 @@ const {
   getQuestionById,
   updateQuestionById,
   deleteQuestionById,
+  getStudentsByQuizIdAndTeacherId,
 } = require("../controllers/quiz.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -23,6 +24,7 @@ router.post("/", authorizeRole("ADMIN", "TEACHER"), createQuiz);
 router.get("/", authorizeRole("ADMIN", "TEACHER", "STUDENT"), listQuizzes);
 router.get("/teacher/:teacherId", authorizeRole("TEACHER"), getQuizzesByTeacherId);
 router.get("/:id", authorizeRole("ADMIN", "TEACHER", "STUDENT"), getQuizById);
+router.get("/:id/teacher/:teacherId", authorizeRole("TEACHER"), getStudentsByQuizIdAndTeacherId);
 router.put("/:id", authorizeRole("ADMIN", "TEACHER"), updateQuizById);
 router.delete("/:id", authorizeRole("ADMIN", "TEACHER"), deleteQuizById);
 

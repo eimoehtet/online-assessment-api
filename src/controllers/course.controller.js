@@ -158,7 +158,6 @@ const getCourseByIdHandler = async (req, res) => {
 };
 
 const getCourseByTeacherIdHandler = async (req, res) => {
-  console.log("Received request to get courses for teacher_id:", req.params.teacherId);
   try {
     const teacherId = parseTeacherId(req.params.teacherId);
     if (!teacherId) {

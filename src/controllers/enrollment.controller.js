@@ -162,7 +162,6 @@ const listEnrollments = async (req, res) => {
 };
 
 const getEnrollmentById = async (req, res) => {
-  console.log("Fetching enrollment by ID:", req.params.id);
   const enrollmentId = parseEnrollmentId(req.params.id);
   if (!enrollmentId) {
     return res.status(400).json({ message: "Invalid enrollment ID." });

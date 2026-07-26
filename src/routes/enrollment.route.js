@@ -6,6 +6,7 @@ const {
   updateEnrollment,
   deleteEnrollmentById,
   getEnrollmentsByCourse,
+  getEnrollmentsByCourseAndShift,
   getEnrollmentsByStudent,
   bulkEnrollment,
 } = require('../controllers/enrollment.controller');
