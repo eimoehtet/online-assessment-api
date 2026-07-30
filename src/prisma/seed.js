@@ -6,7 +6,7 @@ const prisma = require("../config/prisma");
 const users = [
   {
     name: "Admin User",
-    email: "admin@lightlms.test",
+    email: "eimoehtet.mm@gmail.com",
     rawPassword: "Admin@123",
     role: "ADMIN",
     student_id: null,
@@ -16,7 +16,7 @@ const users = [
   },
   {
     name: "Teacher User",
-    email: "teacher@lightlms.test",
+    email: "eimoehtet.mm+teacher@gmail.com",
     rawPassword: "Teacher@123",
     role: "TEACHER",
     student_id: null,
@@ -26,7 +26,7 @@ const users = [
   },
   {
     name: "Student User",
-    email: "student@lightlms.test",
+    email: "cse2023210052@ppiu.edu.kh",
     rawPassword: "Student@123",
     role: "STUDENT",
     student_id: "STU-0001",

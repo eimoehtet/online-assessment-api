@@ -11,6 +11,8 @@ const {
   getTeachersByAdmin,
   getStudentsByAdmin,
   toggleUserStatusByAdmin,
+  forgotPasswordController,
+  resetPasswordWithTokenController,
 } = require("../controllers/user.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -18,6 +20,8 @@ const authorizeRole = require("../middlewares/authorize-role.middleware");
 const router = Router();
 
 router.post("/login", login);
+router.post("/forgot-password", forgotPasswordController);
+router.post("/reset-password-with-token", resetPasswordWithTokenController);
 
 router.use(authMiddleware);
 router.use(authorizeRole("ADMIN", "TEACHER", "STUDENT"));

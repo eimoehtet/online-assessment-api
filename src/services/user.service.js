@@ -154,6 +154,75 @@ const toggleUserStatus = async (id) => {
   });
 };
 
+const crypto = require("crypto");
+const { sendResetPasswordEmail } = require("./email.service");
+
+const forgotPassword = async (emailOrId) => {
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: emailOrId },
+        { student_id: emailOrId }
+      ]
+    }
+  });
+
+  if (!user) {
+    return { success: true, message: "If an account with that email/ID exists, a password reset link has been sent." };
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetExpires = new Date(Date.now() + 3600000); // 1 hour
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      reset_password_token: resetToken,
+      reset_password_expires: resetExpires,
+    },
+  });
+
+  await sendResetPasswordEmail(user.email, resetToken, user.name);
+
+  return { success: true, message: "If an account with that email/ID exists, a password reset link has been sent." };
+};
+
+const resetPasswordWithToken = async (token, newPassword) => {
+  if (!token || !newPassword) {
+    const error = new Error("Token and new password are required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      reset_password_token: token,
+      reset_password_expires: {
+        gte: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    const error = new Error("Invalid or expired password reset token.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      reset_password_token: null,
+      reset_password_expires: null,
+    },
+  });
+
+  return { success: true, message: "Password has been successfully reset." };
+};
+
 module.exports = {
   findUserByEmail,
   findUserByStudentId,
@@ -167,4 +236,7 @@ module.exports = {
   getTeachers,
   getStudents,
   toggleUserStatus,
+  forgotPassword,
+  resetPasswordWithToken,
 };
+

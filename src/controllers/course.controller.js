@@ -178,7 +178,7 @@ const updateCourse = async (req, res) => {
       return res.status(400).json({ message: "Invalid course id." });
     }
 
-    const { name, code, teacher_id } = req.body;
+    const { name, code, teacher_id, shift } = req.body;
     const data = {};
 
     if (name !== undefined) {
@@ -220,6 +220,13 @@ const updateCourse = async (req, res) => {
 
       data.teacher_id = teacherId;
     }
+
+    if (shift !== undefined) {
+      if (!shift) {
+        return res.status(400).json({ message: "Shift cannot be empty." });
+      }
+      data.shift = shift;
+    } 
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ message: "No data provided for update." });

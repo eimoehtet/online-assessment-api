@@ -12,6 +12,8 @@ const {
   getTeachers,
   getStudents,
   toggleUserStatus,
+  forgotPassword,
+  resetPasswordWithToken,
 } = require("../services/user.service");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
@@ -414,6 +416,40 @@ const toggleUserStatusByAdmin = async (req, res) => {
   }
 };
 
+const forgotPasswordController = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email or User ID is required." });
+    }
+
+    const result = await forgotPassword(email);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error sending forgot password email:", error);
+    return res.status(500).json({ message: error.message || "Failed to process request." });
+  }
+};
+
+const resetPasswordWithTokenController = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: "Token and new password are required." });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long." });
+    }
+
+    const result = await resetPasswordWithToken(token, newPassword);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    const statusCode = error.statusCode || 400;
+    return res.status(statusCode).json({ message: error.message || "Failed to reset password." });
+  }
+};
+
 module.exports = {
   login,
   createUserByAdmin,
@@ -426,4 +462,7 @@ module.exports = {
   getTeachersByAdmin,
   getStudentsByAdmin,
   toggleUserStatusByAdmin,
+  forgotPasswordController,
+  resetPasswordWithTokenController,
 };
+
