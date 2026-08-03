@@ -23,7 +23,6 @@ const publicInclude = {
 };
 
 const createEnrollment = async (courseId, studentId, shift) => {
-  console.log("Creating enrollment with courseId:", courseId, "studentId:", studentId, "shift:", shift);
   if (!courseId) {
     throw new Error("courseId is required.");
   }

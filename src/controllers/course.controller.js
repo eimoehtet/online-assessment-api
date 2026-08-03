@@ -6,6 +6,7 @@ const {
   findCourseByCode,
   updateCourseById,
   deleteCourseById,
+  toggleCourseStatus,
 } = require("../services/course.service");
 const { getUserById } = require("../services/user.service");
 
@@ -270,6 +271,28 @@ const deleteCourse = async (req, res) => {
   }
 };
 
+const toggleCourseStatusHandler = async (req, res) => {
+  try {
+    const courseId = parseCourseId(req.params.id);
+    if (!courseId) {
+      return res.status(400).json({ message: "Invalid course id." });
+    }
+
+    const updatedCourse = await toggleCourseStatus(courseId);
+
+    return res.status(200).json({
+      message: "Course status toggled successfully.",
+      course: updatedCourse,
+    });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    return res.status(500).json({ message: "Failed to toggle course status." });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
@@ -277,8 +300,8 @@ module.exports = {
   getCourseByTeacherId: getCourseByTeacherIdHandler,
   updateCourse,
   deleteCourse,
-  allowedRoles,
   getUniqueConflictMessage,
   parseCourseId,
   getPagination,
+  toggleCourseStatusHandler,
 };

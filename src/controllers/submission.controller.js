@@ -19,6 +19,7 @@ const {
   gradeSubmissionAnswer,
   completeSubmissionReview,
   releaseSubmissionScore,
+  getSubmissionsByQuizId,
 } = require("../services/submission.service");
 
 const allowedEventTypes = [
@@ -736,6 +737,32 @@ const deleteBehaviorLogByIdHandler = async (req, res) => {
   }
 };
 
+const getSubmissionsByQuizIdHandler = async (req, res) => {
+  const quizId = parsePositiveInt(req.params.quizId);
+  if (!quizId) {
+    return res.status(400).json({ message: "Invalid quiz ID." });
+  }
+
+  const { page, limit, skip } = getPagination(req.query);
+
+  try {
+    const submissions = await getSubmissionsByQuizId(quizId, { skip, take: limit });
+    console.log("Submissions::", submissions);
+    return res.status(200).json({
+      data: submissions.items,
+      meta: {
+        page,
+        limit,
+        total: submissions.total,
+        totalPages: Math.ceil(submissions.total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching submissions by quiz ID:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 module.exports = {
   allowedEventTypes,
   listSubmissionsHandler,
@@ -756,4 +783,5 @@ module.exports = {
   getSubmissionBehaviorLogs,
   getBehaviorLogByIdHandler,
   deleteBehaviorLogByIdHandler,
+  getSubmissionsByQuizIdHandler,
 };

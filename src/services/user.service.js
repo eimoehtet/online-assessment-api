@@ -137,7 +137,6 @@ const changePassword = async(id, currentPassword, newPassword) => {
 }
 
 const toggleUserStatus = async (id) => {
-  console.log("Toggling status for user ID:", id); // Debugging line
   const user = await prisma.user.findUnique({
     where: { id },
   });

@@ -54,9 +54,6 @@ enum Shift {
 	EVENING
 }
 
-
-
-
 model User {
 	id            Int          @id @default(autoincrement())
 	name          String
@@ -74,6 +71,7 @@ model User {
 	quizzes       Quiz[]
 	enrollments   Enrollment[]
 	submissions   Submission[]
+	quizAttendances QuizAttendance[]
 	status				Int          @default(1)
 	createdAt     DateTime     @default(now())
 	updatedAt     DateTime     @updatedAt
@@ -92,6 +90,7 @@ model Course {
 	teacher     User         @relation(fields: [teacher_id], references: [id])
 	enrollments Enrollment[]
 	quizzes     Quiz[]
+	status 			Boolean 		 @default(true)
 
 	@@index([teacher_id])
 
@@ -130,6 +129,7 @@ model Quiz {
 	status           Status       @default(DRAFT)
 	questions        Question[]
 	submissions      Submission[]
+	quizAttendances QuizAttendance[]
 	publishedAt			 DateTime     @db.Timestamp(0) @default(now())
 	createdAt        DateTime     @default(now())
 	updatedAt        DateTime     @updatedAt
@@ -222,4 +222,17 @@ model BehaviorLog {
 
 	@@index([submission_answer_id])
 	@@map("behaviour_logs")
+}
+
+model QuizAttendance {
+  id         Int @id @default(autoincrement())
+  quiz_id    Int
+  quiz       Quiz @relation(fields:[quiz_id], references:[id])
+  student_id Int
+  student    User @relation(fields:[student_id], references:[id])
+  status  	 Boolean @default(true)
+  marked_by  Int?
+
+  @@unique([quiz_id, student_id])
+	@@map("quiz_attendances")
 }

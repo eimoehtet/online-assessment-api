@@ -157,7 +157,7 @@ const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId) => {
           id: parseInt(quizId, 10),
           teacher_id: parseInt(teacherId, 10),
         },
-      },
+      }
     },
   });
 
@@ -172,9 +172,87 @@ const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId) => {
     },
   });
 
-  return enrollments.map(enrollment => enrollment.student);
+  return enrollments;
 };
 
+const getAllQuizzesReportByAdmin = async ({ skip, take } = {}) => {
+  const quizzes = await prisma.quiz.findMany({
+    include: {
+      teacher: {
+        select: {
+          name: true,
+        },
+      },
+      course: {
+        select: {
+          id: true,
+          name: true,
+          shift: true,
+        },
+      },
+    },
+  });
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: {
+      course_id: {
+        in: quizzes.map((quiz) => quiz.course.id),
+      },
+    },
+  });
+
+  const submissions = await prisma.submission.findMany({
+    where: {
+      quiz_id: {
+        in: quizzes.map((quiz) => quiz.id),
+      },
+    },
+    select: {
+      quiz_id: true,
+      student_id: true,
+    },
+  });
+
+  // Map enrollments by course_id for quick lookup
+  const enrollmentsByCourseId = enrollments.reduce((acc, enrollment) => {
+    if (!acc[enrollment.course_id]) {
+      acc[enrollment.course_id] = [];
+    }
+    acc[enrollment.course_id].push(enrollment.student);
+    return acc;
+  }, {});
+
+  // Map submissions by quiz_id for quick lookup
+  const submissionsByQuizId = submissions.reduce((acc, submission) => {
+    if (!acc[submission.quiz_id]) {
+      acc[submission.quiz_id] = [];
+    }
+    acc[submission.quiz_id].push(submission);
+    return acc;
+  }, {});
+
+  const reports = quizzes.map((quiz) => {
+    const key = `${quiz.course.id}-${quiz.teacher_id}-${quiz.course.shift}`;
+
+    const numberOfStudents = enrollmentsByCourseId[quiz.course.id]?.length || 0;
+
+    const attendees = submissionsByQuizId[quiz.id]?.length || 0;
+    const absences = numberOfStudents - attendees;
+
+    return {
+      quiz_id: quiz.id,
+      quiz_title: quiz.title,
+      course_name: quiz.course.name,
+      teacher_name: quiz.teacher.name,
+      shift: quiz.course.shift,
+      number_of_students: numberOfStudents,
+      attendees,
+      absences,
+    };
+  });
+
+  return reports;
+};
 
 module.exports = {
   createQuiz,
@@ -189,4 +267,5 @@ module.exports = {
   deleteQuestionById,
   getQuizzesByTeacherId,
   getStudentsByQuizIdAndTeacherId,
+  getAllQuizzesReportByAdmin,
 };

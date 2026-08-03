@@ -12,6 +12,7 @@ const {
   updateQuestionById,
   deleteQuestionById,
   getStudentsByQuizIdAndTeacherId,
+  getAllQuizzesReportByAdmin,
 } = require("../controllers/quiz.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -33,5 +34,7 @@ router.get("/:id/questions", authorizeRole("ADMIN", "TEACHER", "STUDENT"), listQ
 router.get("/:id/questions/:questionId", authorizeRole("ADMIN", "TEACHER", "STUDENT"), getQuestionById);
 router.patch("/:id/questions/:questionId", authorizeRole("ADMIN", "TEACHER"), updateQuestionById);
 router.delete("/:id/questions/:questionId", authorizeRole("ADMIN", "TEACHER"), deleteQuestionById);
+
+router.get("/report/all", authorizeRole("ADMIN"), getAllQuizzesReportByAdmin);
 
 module.exports = router;

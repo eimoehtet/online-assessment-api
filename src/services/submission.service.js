@@ -30,6 +30,7 @@ const submissionPublicInclude = {
       id: true,
       name: true,
       email: true,
+      student_id: true,
       role: true,
     },
   },
@@ -723,6 +724,22 @@ const releaseSubmissionScore = async (submission_id) => {
   return prisma.submission.update({ where: { id: submission_id }, data: { status: "RELEASED", released_at: new Date() } });
 };
 
+const getSubmissionsByQuizId = async (quizId, { skip, take }) => {
+  console.log("Quiz ID received in getSubmissionsByQuizId:", quizId);
+  const [items, total] = await Promise.all([
+    prisma.submission.findMany({
+      where: { quiz_id: quizId },
+      skip,
+      take,
+      orderBy: { id: "desc" },
+      include: submissionPublicInclude,
+    }),
+    prisma.submission.count({ where: { quiz_id: quizId } }),
+  ]);
+
+  return { items, total };
+};
+
 module.exports = {
   createSubmission,
   getSubmissionById,
@@ -745,4 +762,5 @@ module.exports = {
   gradeSubmissionAnswer,
   completeSubmissionReview,
   releaseSubmissionScore,
+  getSubmissionsByQuizId,
 };

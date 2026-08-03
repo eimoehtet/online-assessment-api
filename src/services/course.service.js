@@ -71,6 +71,24 @@ const deleteCourseById = async (id) => {
   });
 };
 
+const toggleCourseStatus = async (id) => {
+  const course = await prisma.course.findUnique({
+    where: { id },
+  });
+
+  if (!course) {
+    throw new Error("Course not found");
+  }
+
+  const newStatus = !course.status;
+
+  return prisma.course.update({
+    where: { id },
+    data: { status: newStatus },
+    include: coursePublicInclude,
+  });
+};
+
 module.exports = {
   createCourse,
   listCourses,
@@ -79,4 +97,5 @@ module.exports = {
   updateCourseById,
   deleteCourseById,
   getCourseByTeacherId,
+  toggleCourseStatus,
 };

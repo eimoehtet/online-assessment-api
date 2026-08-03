@@ -8,6 +8,7 @@ const courseRoute = require("./routes/course.route");
 const enrollmentRoute = require("./routes/enrollment.route");
 const quizRoute = require("./routes/quiz.route");
 const submissionRoute = require("./routes/submission.route");
+const quizAttendanceRoute = require("./routes/quiz_attendance.route");
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use("/api/courses", courseRoute);
 app.use("/api/enrollments", enrollmentRoute);
 app.use("/api/quizzes", quizRoute);
 app.use("/api/submissions", submissionRoute);
+app.use("/api/quiz_attendances", quizAttendanceRoute);
 
 const db = require("./config/db");
 

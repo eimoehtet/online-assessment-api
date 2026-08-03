@@ -6,6 +6,7 @@ const {
   updateCourse,
   deleteCourse,
   getCourseByTeacherId,
+  toggleCourseStatusHandler,
 } = require("../controllers/course.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authorizeRole = require("../middlewares/authorize-role.middleware");
@@ -20,5 +21,6 @@ router.get("/:id", authorizeRole("ADMIN", "TEACHER", "STUDENT"), getCourseById);
 router.get("/teacher/:teacherId", authorizeRole("TEACHER"), getCourseByTeacherId);
 router.patch("/:id", authorizeRole("ADMIN"), updateCourse);
 router.delete("/:id", authorizeRole("ADMIN"), deleteCourse);
+router.post("/:id/toggle-status", authorizeRole("ADMIN"), toggleCourseStatusHandler);
 
 module.exports = router;

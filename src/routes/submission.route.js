@@ -20,6 +20,7 @@ const {
   getSubmissionBehaviorLogs,
   getBehaviorLogByIdHandler,
   deleteBehaviorLogByIdHandler,
+  getSubmissionsByQuizIdHandler,
 } = require("../controllers/submission.controller");
 
 const router = Router();
@@ -101,6 +102,11 @@ router.delete(
   "/:id/behavior-logs/:logId",
   authorizeRole("ADMIN", "TEACHER", "STUDENT"),
   deleteBehaviorLogByIdHandler,
+);
+router.get(
+  "/quiz/:quizId",
+  authorizeRole("ADMIN", "TEACHER"),
+  getSubmissionsByQuizIdHandler,
 );
 
 module.exports = router;

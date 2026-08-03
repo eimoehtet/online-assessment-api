@@ -11,6 +11,7 @@ const {
   deleteQuestionById: deleteQuestionByIdRecord,
   getQuizzesByTeacherId: getQuizzesByTeacherIdRecord,
   getStudentsByQuizIdAndTeacherId: getStudentsByQuizIdAndTeacherIdRecord,
+  getAllQuizzesReportByAdmin: getAllQuizzesReportByAdminRecord,
 } = require("../services/quiz.service");
 const { getCourseById } = require("../services/course.service");
 
@@ -609,6 +610,27 @@ const getStudentsByQuizIdAndTeacherId = async (req, res) => {
   }
 };
 
+const getAllQuizzesReportByAdmin = async (req, res) => {
+  try {
+    const { page, skip, limit } = getPagination(req.query);
+
+    const quizzes = await getAllQuizzesReportByAdminRecord({ skip, take: limit });
+
+    return res.status(200).json({
+      data: quizzes,
+      meta: {
+        page,
+        limit,
+        total: quizzes.length,
+        totalPages: Math.ceil(quizzes.length / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching quizzes report by admin:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 module.exports = {
   allowedRoles,
   getUniqueConflictMessage,
@@ -628,4 +650,5 @@ module.exports = {
   deleteQuestionById,
   getQuizzesByTeacherId,
   getStudentsByQuizIdAndTeacherId,
+  getAllQuizzesReportByAdmin,
 };
