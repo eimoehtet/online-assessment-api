@@ -1,5 +1,4 @@
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const {
   findUserByEmail,
   createUser,
@@ -14,9 +13,54 @@ const {
   toggleUserStatus,
   forgotPassword,
   resetPasswordWithToken,
+  revokeAllUserSessions,
 } = require("../services/user.service");
+const {
+  createSession,
+  refreshSession,
+  revokeSessionFromToken,
+} = require("../services/auth.service");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
+
+const refreshCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+  const secure = process.env.AUTH_COOKIE_SECURE
+    ? process.env.AUTH_COOKIE_SECURE === "true"
+    : isProduction;
+  const sameSite = process.env.AUTH_COOKIE_SAME_SITE || (isProduction ? "none" : "lax");
+
+  if (sameSite === "none" && !secure) {
+    throw new Error("AUTH_COOKIE_SAME_SITE=none requires AUTH_COOKIE_SECURE=true.");
+  }
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: "/api/users",
+  };
+};
+
+const setRefreshCookie = (res, token, expiresAt) => {
+  res.cookie("refresh_token", token, { ...refreshCookieOptions(), expires: expiresAt });
+};
+
+const clearRefreshCookie = (res) => {
+  res.clearCookie("refresh_token", refreshCookieOptions());
+};
+
+const getRefreshToken = (req) => {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  const cookie = header.split(";").map((value) => value.trim()).find((value) => value.startsWith("refresh_token="));
+  if (!cookie) return null;
+  try {
+    return decodeURIComponent(cookie.slice("refresh_token=".length));
+  } catch (_error) {
+    return null;
+  }
+};
 
 const getUniqueConflictMessage = (error) => {
   const target = error?.meta?.target;
@@ -71,6 +115,7 @@ const getPagination = (query) => {
 };
 
 const login = async (req, res) => {
+  try {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -95,19 +140,52 @@ const login = async (req, res) => {
     return res.status(401).json({ message: "Invalid email or password." });
   }
 
-  const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "8h" },
-  );
-
-  const { password: _, ...userWithoutPassword } = user;
+  const {
+    password: _,
+    reset_password_token: __,
+    reset_password_expires: ___,
+    ...userWithoutPassword
+  } = user;
+  const session = await createSession(user);
+  setRefreshCookie(res, session.refreshToken, session.expiresAt);
 
   return res.status(200).json({
     message: "Login successful.",
-    token,
+    accessToken: session.accessToken,
+    csrfToken: session.csrfToken,
     user: userWithoutPassword,
   });
+  } catch (error) {
+    console.error("Login failed:", error);
+    return res.status(500).json({ message: "Unable to create a login session." });
+  }
+};
+
+const refresh = async (req, res) => {
+  const session = await refreshSession(
+    getRefreshToken(req),
+    req.get("X-CSRF-Token"),
+  );
+
+  if (!session) {
+    clearRefreshCookie(res);
+    return res.status(401).json({ message: "Session expired or invalid." });
+  }
+
+  const { password: _, reset_password_token: __, reset_password_expires: ___, ...user } = session.user;
+  setRefreshCookie(res, session.refreshToken, session.expiresAt);
+  return res.status(200).json({ accessToken: session.accessToken, csrfToken: session.csrfToken, user });
+};
+
+const logout = async (req, res) => {
+  await revokeSessionFromToken(getRefreshToken(req), req.get("X-CSRF-Token"));
+  clearRefreshCookie(res);
+  return res.status(204).send();
+};
+
+const getCurrentUser = async (req, res) => {
+  const user = await getUserById(req.user.id);
+  return res.status(200).json({ user });
 };
 
 const createUserByAdmin = async (req, res) => {
@@ -312,6 +390,9 @@ const updateUserByAdmin = async (req, res) => {
     }
 
     const updatedUser = await updateUserById(userId, data);
+    if (password !== undefined || role !== undefined) {
+      await revokeAllUserSessions(userId);
+    }
 
     return res.status(200).json({
       message: "User updated successfully.",
@@ -360,6 +441,7 @@ const resetUserPasswordByAdmin = async (req, res) => {
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
     await updateUserById(userId, { password: hashedPassword });
+    await revokeAllUserSessions(userId);
 
     return res.status(200).json({ message: "Password reset successfully." });
   } catch (error) {
@@ -373,11 +455,6 @@ const resetUserPasswordByAdmin = async (req, res) => {
 
 const changePasswordByUser = async (req, res) => {
   try {
-    const userId = parseUserId(req.params.id);
-    if (!userId) {
-      return res.status(400).json({ message: "Invalid user id." });
-    }
-
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "Current and new passwords are required." });
@@ -385,11 +462,15 @@ const changePasswordByUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await changePassword(userId, currentPassword, hashedPassword);
+    await changePassword(req.user.id, currentPassword, hashedPassword);
+    await revokeAllUserSessions(req.user.id);
 
-    return res.status(200).json({ message: "Password changed successfully." });
+    return res.status(200).json({ success: true, message: "Password changed successfully." });
   } catch (error) {
     console.error("Error changing password:", error);
+    if (error.message === "Current password is incorrect") {
+      return res.status(400).json({ message: error.message });
+    }
     if (error.code === "P2025") {
       return res.status(404).json({ message: "User not found." });
     }
@@ -406,6 +487,9 @@ const toggleUserStatusByAdmin = async (req, res) => {
     }
 
     const changed = await toggleUserStatus(userId);
+    if (changed.status === 0) {
+      await revokeAllUserSessions(userId);
+    }
 
     return res.status(200).json({
       message: `User ${changed.status ? "activated" : "deactivated"} successfully.`,
@@ -456,6 +540,9 @@ const resetPasswordWithTokenController = async (req, res) => {
 
 module.exports = {
   login,
+  refresh,
+  logout,
+  getCurrentUser,
   createUserByAdmin,
   getUsersByAdmin,
   getUserByIdByAdmin,
@@ -469,4 +556,3 @@ module.exports = {
   forgotPasswordController,
   resetPasswordWithTokenController,
 };
-

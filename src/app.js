@@ -9,10 +9,16 @@ const enrollmentRoute = require("./routes/enrollment.route");
 const quizRoute = require("./routes/quiz.route");
 const submissionRoute = require("./routes/submission.route");
 const quizAttendanceRoute = require("./routes/quiz_attendance.route");
+const prisma = require("./config/prisma");
 
 const app = express();
+// Required when the API runs behind a HTTPS reverse proxy (Render, Railway, etc.).
+app.set("trust proxy", 1);
 
-const allowedOrigins = ["http://localhost:5173", "https://light-lms.vercel.app"];
+const allowedOrigins = (process.env.FRONTEND_ORIGINS || "http://localhost:5173,https://light-lms.vercel.app")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const corsOptions = {
   origin(origin, callback) {
@@ -23,7 +29,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
 };
 
 app.use(cors(corsOptions));
@@ -34,6 +40,16 @@ app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to the Light LMS API!" });
+});
+
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.status(200).json({ status: "ok", database: "connected" });
+  } catch (error) {
+    console.error("Health check database failure:", error);
+    return res.status(503).json({ status: "degraded", database: "unavailable" });
+  }
 });
 
 app.use("/api/users", userRoute);

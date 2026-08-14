@@ -72,6 +72,7 @@ model User {
 	enrollments   Enrollment[]
 	submissions   Submission[]
 	quizAttendances QuizAttendance[]
+	authSessions AuthSession[]
 	status				Int          @default(1)
 	createdAt     DateTime     @default(now())
 	updatedAt     DateTime     @updatedAt
@@ -79,6 +80,22 @@ model User {
 	reset_password_expires DateTime? @db.Timestamp(0)
 
 	@@map("users")
+}
+
+model AuthSession {
+	id                 String   @id @db.VarChar(191)
+	user_id            Int
+	refresh_token_hash String   @db.VarChar(191)
+	csrf_token_hash    String   @db.VarChar(191)
+	createdAt          DateTime @default(now())
+	lastUsedAt         DateTime @default(now())
+	expiresAt          DateTime
+	revokedAt          DateTime?
+	user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+	@@index([user_id])
+	@@index([expiresAt])
+	@@map("auth_sessions")
 }
 
 model Course {

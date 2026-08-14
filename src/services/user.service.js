@@ -136,6 +136,11 @@ const changePassword = async(id, currentPassword, newPassword) => {
 
 }
 
+const revokeAllUserSessions = (id) => prisma.authSession.updateMany({
+  where: { user_id: id, revokedAt: null },
+  data: { revokedAt: new Date() },
+});
+
 const toggleUserStatus = async (id) => {
   const user = await prisma.user.findUnique({
     where: { id },
@@ -219,6 +224,8 @@ const resetPasswordWithToken = async (token, newPassword) => {
     },
   });
 
+  await revokeAllUserSessions(user.id);
+
   return { success: true, message: "Password has been successfully reset." };
 };
 
@@ -232,10 +239,10 @@ module.exports = {
   deleteUserById,
   resetPassword,
   changePassword,
+  revokeAllUserSessions,
   getTeachers,
   getStudents,
   toggleUserStatus,
   forgotPassword,
   resetPasswordWithToken,
 };
-
