@@ -9,7 +9,7 @@ const {
   getEnrollmentsByStudent: getEnrollmentsByStudentRecord,
 } = require("../services/enrollment.service");
 const { getCourseById } = require("../services/course.service");
-const { getUserById, getUserIdByStudentID, findUserByStudentId, findUserByEmail, createUser } = require("../services/user.service");
+const { getUserById, findUserByStudentId } = require("../services/user.service");
 const prisma = require("../config/prisma");
 const bcrypt = require("bcrypt");
 
@@ -341,47 +341,77 @@ const bulkEnrollment = async (req, res) => {
     }
 
     const password = await bcrypt.hash("Default123!", 10);
+    const uniqueStudents = new Map();
 
-    const results = await prisma.$transaction(async (tx) => {
-      const enrollments = [];
-      for (const s of students) {
-        let student = await findUserByStudentId(String(s.student_id));
-        if (!student) {
-          student = await createUser({
-            name: s.name,
-            email: `${s.student_id}@ppiu.edu.kh`,
-            password,
-            student_id: String(s.student_id),
-            role: "STUDENT",
-            date_of_birth: s.date_of_birth,
-            address: "N/A",
-            phone_number: String(s.phone_number),
-          });
-        }
-        
-        const existingEnrollment = await tx.enrollment.findUnique({
-          where: {
-            student_id_course_id: {
-              student_id: student.id,
-              course_id: courseId,
-            }
-          }
-        });
-        
-        if (!existingEnrollment) {
-           const enrollment = await tx.enrollment.create({
-             data: { course_id: courseId, student_id: student.id },
-           });
-           enrollments.push(enrollment);
-        }
+    for (const student of students) {
+      const studentId = String(student.student_id ?? "").trim();
+      if (!studentId) {
+        return res.status(400).json({ message: "Every student must have a student_id." });
       }
-      return enrollments;
+      if (!uniqueStudents.has(studentId)) {
+        uniqueStudents.set(studentId, student);
+      }
+    }
+
+    const studentIds = [...uniqueStudents.keys()];
+    const enrollmentCount = await prisma.$transaction(async (tx) => {
+      const existingStudents = await tx.user.findMany({
+        where: { student_id: { in: studentIds } },
+        select: { id: true, student_id: true },
+      });
+      const existingStudentIds = new Set(
+        existingStudents.map((student) => student.student_id),
+      );
+      const newStudents = studentIds
+        .filter((studentId) => !existingStudentIds.has(studentId))
+        .map((studentId) => {
+          const student = uniqueStudents.get(studentId);
+          return {
+            name: student.name,
+            email: `${studentId}@ppiu.edu.kh`,
+            password,
+            student_id: studentId,
+            role: "STUDENT",
+            date_of_birth: student.date_of_birth,
+            address: "N/A",
+            phone_number: String(student.phone_number),
+          };
+        });
+
+      if (newStudents.length > 0) {
+        await tx.user.createMany({ data: newStudents });
+      }
+
+      const allStudents = await tx.user.findMany({
+        where: { student_id: { in: studentIds } },
+        select: { id: true },
+      });
+      const result = await tx.enrollment.createMany({
+        data: allStudents.map((student) => ({
+          course_id: courseId,
+          student_id: student.id,
+        })),
+        skipDuplicates: true,
+      });
+
+      return result.count;
+    }, {
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
-    return res.status(201).json({ message: "Bulk enrollment completed.", count: results.length });
+    return res.status(201).json({ message: "Bulk enrollment completed.", count: enrollmentCount });
   } catch (error) {
     console.error("Error in bulk enrollment:", error);
-    return res.status(500).json({ message: `Internal server error. ${error}` });
+    if (error.code === "P2002") {
+      return res.status(409).json({ message: getUniqueConflictMessage(error) });
+    }
+    if (error.code === "P2028") {
+      return res.status(503).json({
+        message: "Bulk enrollment could not finish in time. No changes were applied.",
+      });
+    }
+    return res.status(500).json({ message: "Internal server error." });
   }
 };
 
