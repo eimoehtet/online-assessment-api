@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const compression = require("compression");
+const requestTiming = require("./middlewares/request-timing.middleware");
 
 const userRoute = require("./routes/user.route");
 const courseRoute = require("./routes/course.route");
@@ -9,6 +11,7 @@ const enrollmentRoute = require("./routes/enrollment.route");
 const quizRoute = require("./routes/quiz.route");
 const submissionRoute = require("./routes/submission.route");
 const quizAttendanceRoute = require("./routes/quiz_attendance.route");
+const dashboardRoute = require("./routes/dashboard.route");
 const prisma = require("./config/prisma");
 
 const app = express();
@@ -35,7 +38,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(compression());
+app.use(requestTiming);
+if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -58,20 +63,5 @@ app.use("/api/enrollments", enrollmentRoute);
 app.use("/api/quizzes", quizRoute);
 app.use("/api/submissions", submissionRoute);
 app.use("/api/quiz_attendances", quizAttendanceRoute);
-
-const db = require("./config/db");
-
-app.get("/test-db", async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT 1 + 1 AS result");
-
-    res.json(rows);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      error: "Database connection failed",
-    });
-  }
-});
+app.use("/api/dashboard", dashboardRoute);
 module.exports = app;

@@ -20,6 +20,7 @@ const {
   refreshSession,
   revokeSessionFromToken,
 } = require("../services/auth.service");
+const { getPagination } = require("../utils/pagination");
 
 const allowedRoles = ["ADMIN", "TEACHER", "STUDENT"];
 
@@ -98,20 +99,6 @@ const parseUserId = (value) => {
   }
 
   return parsed;
-};
-
-const getPagination = (query) => {
-  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(query.limit || "10", 10), 1),
-    100,
-  );
-
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
 };
 
 const login = async (req, res) => {
@@ -418,6 +405,7 @@ const deleteUserByAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid user id." });
     }
 
+    await revokeAllUserSessions(userId);
     await deleteUserById(userId);
 
     return res.status(200).json({ message: "User deleted successfully." });

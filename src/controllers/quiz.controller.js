@@ -14,6 +14,7 @@ const {
   getAllQuizzesReportByAdmin: getAllQuizzesReportByAdminRecord,
 } = require("../services/quiz.service");
 const { getCourseById } = require("../services/course.service");
+const { getPagination, paginationMeta } = require("../utils/pagination");
 
 const allowedRoles = ["ADMIN", "TEACHER"];
 
@@ -55,6 +56,32 @@ const parseCourseId = (value) => {
   }
 
   return parsed;
+};
+
+const normalizeQuizTiming = (body, { requireEndDate = false } = {}) => {
+  const data = { ...body };
+
+  if (requireEndDate || body.end_date !== undefined) {
+    const endDate = new Date(body.end_date);
+    if (!body.end_date || Number.isNaN(endDate.getTime())) {
+      return { error: "A valid end_date is required." };
+    }
+    data.end_date = endDate;
+  }
+
+  if (body.time_limit !== undefined) {
+    if (body.time_limit === null || body.time_limit === "") {
+      data.time_limit = null;
+    } else {
+      const timeLimit = Number(body.time_limit);
+      if (!Number.isInteger(timeLimit) || timeLimit <= 0) {
+        return { error: "time_limit must be a positive number of minutes or null." };
+      }
+      data.time_limit = timeLimit;
+    }
+  }
+
+  return { data };
 };
 
 const questionTypes = ["MCQ", "TRUE_FALSE", "SHORT_Q", "LONG_Q"];
@@ -241,25 +268,16 @@ const validateQuestionPayload = ({
   };
 };
 
-const getPagination = (query) => {
-  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(query.limit || "10", 10), 1),
-    100,
-  );
-
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
-};
-
 const createQuiz = async (req, res) => {
   const courseId = parseCourseId(req.body.course_id);
 
   if (!courseId) {
     return res.status(400).json({ message: "Valid course_id is required." });
+  }
+
+  const timing = normalizeQuizTiming(req.body, { requireEndDate: true });
+  if (timing.error) {
+    return res.status(400).json({ message: timing.error });
   }
 
   try {
@@ -269,7 +287,7 @@ const createQuiz = async (req, res) => {
     }
 
     const quiz = await createQuizRecord({
-      ...req.body,
+      ...timing.data,
       course_id: courseId,
     });
     return res.status(201).json(quiz);
@@ -327,8 +345,6 @@ const getQuizzesByTeacherId = async (req, res) => {
     const { page, skip, limit } = getPagination(req.query);
     const { items, total } = await getQuizzesByTeacherIdRecord(teacherId, { skip, take: limit });
 
-    console.log("items:", items);
-
     return res.status(200).json({
       data: items,
       meta: {
@@ -370,6 +386,11 @@ const updateQuizById = async (req, res) => {
     return res.status(400).json({ message: "Invalid quiz ID." });
   }
 
+  const timing = normalizeQuizTiming(req.body);
+  if (timing.error) {
+    return res.status(400).json({ message: timing.error });
+  }
+
   try {
     const existingQuiz = await getQuizByIdRecord(id);
     if (!existingQuiz) {
@@ -387,10 +408,10 @@ const updateQuizById = async (req, res) => {
         return res.status(404).json({ message: "Course not found." });
       }
 
-      req.body.course_id = courseId;
+      timing.data.course_id = courseId;
     }
 
-    const updatedQuiz = await updateQuizByIdRecord(id, req.body);
+    const updatedQuiz = await updateQuizByIdRecord(id, timing.data);
     return res.json(updatedQuiz);
   } catch (error) {
     if (error.code === "P2002") {
@@ -583,26 +604,23 @@ const deleteQuestionById = async (req, res) => {
 };
 
 const getStudentsByQuizIdAndTeacherId = async (req, res) => {
-  console.log ("Params received:", req.params);
   const quizId = parseQuizId(req.params.id);
   if (!quizId) {
     return res.status(400).json({ message: "Invalid quiz ID." });
   }
 
-  const teacherId = req.params.teacherId;
+  const teacherId = parseQuizId(req.params.teacherId);
+  if (!teacherId || teacherId !== req.user.id) {
+    return res.status(403).json({ message: "Teachers can only view students for their own quizzes." });
+  }
 
   const { page, skip, limit } = getPagination(req.query);
 
   try {
-    const students = await getStudentsByQuizIdAndTeacherIdRecord(quizId, teacherId, { skip, take: limit });
+    const { items, total } = await getStudentsByQuizIdAndTeacherIdRecord(quizId, teacherId, { skip, take: limit });
     return res.status(200).json({
-      data: students,
-      meta: {
-        page,
-        limit,
-        total: students.length,
-        totalPages: Math.ceil(students.length / limit),
-      },
+      data: items,
+      meta: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
     console.error("Error fetching students by quiz ID and teacher ID:", error);
@@ -614,16 +632,11 @@ const getAllQuizzesReportByAdmin = async (req, res) => {
   try {
     const { page, skip, limit } = getPagination(req.query);
 
-    const quizzes = await getAllQuizzesReportByAdminRecord({ skip, take: limit });
+    const { items, total } = await getAllQuizzesReportByAdminRecord({ skip, take: limit });
 
     return res.status(200).json({
-      data: quizzes,
-      meta: {
-        page,
-        limit,
-        total: quizzes.length,
-        totalPages: Math.ceil(quizzes.length / limit),
-      },
+      data: items,
+      meta: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
     console.error("Error fetching quizzes report by admin:", error);

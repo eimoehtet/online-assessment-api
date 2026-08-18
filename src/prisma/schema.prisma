@@ -1,255 +1,254 @@
 generator client {
-	provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-	provider = "mysql"
-	url      = env("DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
-	ADMIN
-	TEACHER
-	STUDENT
+  ADMIN
+  TEACHER
+  STUDENT
 }
 
 enum Status {
-	DRAFT
-	PUBLISHED
-	CLOSED
+  DRAFT
+  PUBLISHED
+  CLOSED
 }
 
 enum SubmissionStatus {
-	IN_PROGRESS
-	SUBMITTED
-	IN_REVIEW
-	GRADED
-	RELEASED
+  IN_PROGRESS
+  SUBMITTED
+  IN_REVIEW
+  GRADED
+  RELEASED
 }
 
 enum Question_Type {
-	MCQ
-	TRUE_FALSE
-	SHORT_Q
-	LONG_Q
+  MCQ
+  TRUE_FALSE
+  SHORT_Q
+  LONG_Q
 }
 
 enum EventType {
-	TAB_SWITCH
-	COPY_ATTEMPT
-	PASTE_ATTEMPT
-	RAPID_ANSWER_CHANGE
-	FULLSCREEN_EXIT
-	TIME_SPENT_PER_Q
+  TAB_SWITCH
+  COPY_ATTEMPT
+  PASTE_ATTEMPT
+  RAPID_ANSWER_CHANGE
+  FULLSCREEN_EXIT
+  TIME_SPENT_PER_Q
 }
 
 enum Gender {
-	MALE
-	FEMALE
+  MALE
+  FEMALE
 }
 
 enum Shift {
-	MORNING
-	AFTERNOON
-	EVENING
+  MORNING
+  AFTERNOON
+  EVENING
 }
 
 model User {
-	id            Int          @id @default(autoincrement())
-	name          String
-	khmer_name    String?
-	email         String       @unique
-	password      String
-	role          Role         @default(STUDENT)
-	student_id    String?      @unique
-	gender				Gender?
-	major				  String?
-	phone_number  String       @unique
-	date_of_birth DateTime     @db.Date
-	address       String
-	courses       Course[]
-	quizzes       Quiz[]
-	enrollments   Enrollment[]
-	submissions   Submission[]
-	quizAttendances QuizAttendance[]
-	authSessions AuthSession[]
-	status				Int          @default(1)
-	createdAt     DateTime     @default(now())
-	updatedAt     DateTime     @updatedAt
-	reset_password_token String?
-	reset_password_expires DateTime? @db.Timestamp(0)
+  id                     Int              @id @default(autoincrement())
+  name                   String
+  khmer_name             String?
+  email                  String           @unique
+  password               String
+  role                   Role             @default(STUDENT)
+  student_id             String?          @unique
+  gender                 Gender?
+  major                  String?
+  phone_number           String           @unique
+  date_of_birth          DateTime         @db.Date
+  address                String
+  courses                Course[]
+  quizzes                Quiz[]
+  enrollments            Enrollment[]
+  submissions            Submission[]
+  quizAttendances        QuizAttendance[]
+  authSessions           AuthSession[]
+  status                 Int              @default(1)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  reset_password_token   String?
+  reset_password_expires DateTime?        @db.Timestamp(0)
 
-	@@map("users")
+  @@map("users")
 }
 
 model AuthSession {
-	id                 String   @id @db.VarChar(191)
-	user_id            Int
-	refresh_token_hash String   @db.VarChar(191)
-	csrf_token_hash    String   @db.VarChar(191)
-	createdAt          DateTime @default(now())
-	lastUsedAt         DateTime @default(now())
-	expiresAt          DateTime
-	revokedAt          DateTime?
-	user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                 String    @id @db.VarChar(191)
+  user_id            Int
+  refresh_token_hash String    @db.VarChar(191)
+  csrf_token_hash    String    @db.VarChar(191)
+  createdAt          DateTime  @default(now())
+  lastUsedAt         DateTime  @default(now())
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-	@@index([user_id])
-	@@index([expiresAt])
-	@@map("auth_sessions")
+  @@index([user_id])
+  @@index([expiresAt])
+  @@map("auth_sessions")
 }
 
 model Course {
-	id          Int          @id @default(autoincrement())
-	name        String
-	code        String       
-	shift				Shift 		   @default(MORNING)
-	teacher_id  Int					
-	teacher     User         @relation(fields: [teacher_id], references: [id])
-	enrollments Enrollment[]
-	quizzes     Quiz[]
-	status 			Boolean 		 @default(true)
+  id          Int          @id @default(autoincrement())
+  name        String
+  code        String
+  shift       Shift        @default(MORNING)
+  teacher_id  Int
+  teacher     User         @relation(fields: [teacher_id], references: [id])
+  enrollments Enrollment[]
+  quizzes     Quiz[]
+  status      Boolean      @default(true)
 
-	@@index([teacher_id])
-
-	@@map("courses")
+  @@index([teacher_id])
+  @@map("courses")
 }
 
 model Enrollment {
-	id         Int    @id @default(autoincrement())
-	student_id Int
-	student    User   @relation(fields: [student_id], references: [id])
-	course_id  Int
-	course     Course @relation(fields: [course_id], references: [id])
-	shift      Shift  @default(MORNING)
-	createdAt  DateTime @default(now())
-	updatedAt  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  student_id Int
+  student    User     @relation(fields: [student_id], references: [id])
+  course_id  Int
+  course     Course   @relation(fields: [course_id], references: [id])
+  shift      Shift    @default(MORNING)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
 
-
-	@@index([student_id])
-	@@index([course_id])
-	@@unique([student_id, course_id])
-
-	@@map("enrollments")
+  @@unique([student_id, course_id])
+  @@index([student_id])
+  @@index([course_id])
+  @@map("enrollments")
 }
 
 model Quiz {
-	id               Int          @id @default(autoincrement())
-	title            String
-	start_date       DateTime     @default(now()) @db.Timestamp(0)
-	end_date         DateTime     @db.Timestamp(0) @default(now())
-	time_limit       DateTime     @db.Timestamp(0)
-	course_id        Int
-	teacher_id  Int
-	teacher     User         @relation(fields: [teacher_id], references: [id])
-	course           Course       @relation(fields: [course_id], references: [id])
-	allowed_attempts Int          @default(1)
-	status           Status       @default(DRAFT)
-	questions        Question[]
-	submissions      Submission[]
-	quizAttendances QuizAttendance[]
-	publishedAt			 DateTime     @db.Timestamp(0) @default(now())
-	createdAt        DateTime     @default(now())
-	updatedAt        DateTime     @updatedAt
+  id               Int              @id @default(autoincrement())
+  title            String
+  start_date       DateTime         @default(now()) @db.Timestamp(0)
+  end_date         DateTime         @db.Timestamp(0)
+  time_limit       Int?
+  course_id        Int
+  teacher_id       Int
+  teacher          User             @relation(fields: [teacher_id], references: [id])
+  course           Course           @relation(fields: [course_id], references: [id])
+  allowed_attempts Int              @default(1)
+  status           Status           @default(DRAFT)
+  questions        Question[]
+  submissions      Submission[]
+  quizAttendances  QuizAttendance[]
+  publishedAt      DateTime         @default(now()) @db.Timestamp(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-	@@index([course_id])
-	@@index([teacher_id])
-	@@map("quizzes")
+  @@index([course_id])
+  @@index([teacher_id])
+  @@index([status, course_id])
+  @@index([teacher_id, status])
+  @@map("quizzes")
 }
 
 model Question {
-	id                 Int              @id @default(autoincrement())
-	quiz_id            Int
-	quiz               Quiz             @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
-	question_type      Question_Type
-	question_text      String
-	correct_answer     String?
-	points             Int?
-	question_order     Int
-	options            QuestionOption[]
-	submission_answers SubmissionAnswer[]
+  id                 Int                @id @default(autoincrement())
+  quiz_id            Int
+  quiz               Quiz               @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
+  question_type      Question_Type
+  question_text      String
+  correct_answer     String?
+  points             Int?
+  question_order     Int
+  options            QuestionOption[]
+  submission_answers SubmissionAnswer[]
 
-	@@index([quiz_id])
-	@@unique([quiz_id, question_order])
-	@@map("questions")
+  @@unique([quiz_id, question_order])
+  @@index([quiz_id])
+  @@map("questions")
 }
 
 model QuestionOption {
-	id           Int      @id @default(autoincrement())
-	question_id  Int
-	question     Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
-	option_text  String
-	is_correct   Boolean
-	option_order Int
+  id           Int      @id @default(autoincrement())
+  question_id  Int
+  question     Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  option_text  String
+  is_correct   Boolean
+  option_order Int
 
-	@@index([question_id])
-	@@unique([question_id, option_order])
-	@@map("question_options")
+  @@unique([question_id, option_order])
+  @@index([question_id])
+  @@map("question_options")
 }
 
 model Submission {
-	id           Int                @id @default(autoincrement())
-	student_id   Int
-	student      User               @relation(fields: [student_id], references: [id])
-	quiz_id      Int
-	quiz         Quiz               @relation(fields: [quiz_id], references: [id])
-	total_score  Int?
-	auto_score   Int          @default(0)
-	manual_score Int          @default(0)
-	status       SubmissionStatus @default(IN_PROGRESS)
-	completed_at DateTime?    @db.Timestamp(0)
-	reviewed_by  Int?
-	reviewed_at  DateTime?    @db.Timestamp(0)
-	released_at  DateTime?    @db.Timestamp(0)
-	feedback     String?      @db.Text
-	submitted_at DateTime           @default(now()) @db.Timestamp(0)
-	answers      SubmissionAnswer[]
+  id           Int                @id @default(autoincrement())
+  student_id   Int
+  student      User               @relation(fields: [student_id], references: [id])
+  quiz_id      Int
+  quiz         Quiz               @relation(fields: [quiz_id], references: [id])
+  total_score  Int?
+  auto_score   Int                @default(0)
+  manual_score Int                @default(0)
+  status       SubmissionStatus   @default(IN_PROGRESS)
+  completed_at DateTime?          @db.Timestamp(0)
+  reviewed_by  Int?
+  reviewed_at  DateTime?          @db.Timestamp(0)
+  released_at  DateTime?          @db.Timestamp(0)
+  feedback     String?            @db.Text
+  submitted_at DateTime           @default(now()) @db.Timestamp(0)
+  answers      SubmissionAnswer[]
 
-	@@index([student_id])
-	@@index([quiz_id])
-	@@map("submissions")
+  @@index([student_id])
+  @@index([quiz_id])
+  @@index([quiz_id, student_id])
+  @@map("submissions")
 }
 
 model SubmissionAnswer {
-	id             Int          @id @default(autoincrement())
-	submission_id  Int
-	submission     Submission   @relation(fields: [submission_id], references: [id], onDelete: Cascade)
-	question_id    Int
-	question       Question     @relation(fields: [question_id], references: [id], onDelete: Cascade)
-	student_answer String?       @db.Text
-	is_correct     Boolean?
-	points_awarded Int?
-	teacher_points_awarded Int?
-	teacher_feedback String? @db.Text
-	behaviorLogs   BehaviorLog[]
+  id                     Int           @id @default(autoincrement())
+  submission_id          Int
+  submission             Submission    @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  question_id            Int
+  question               Question      @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  student_answer         String?       @db.Text
+  is_correct             Boolean?
+  points_awarded         Int?
+  teacher_points_awarded Int?
+  teacher_feedback       String?       @db.Text
+  behaviorLogs           BehaviorLog[]
 
-	@@index([submission_id])
-	@@index([question_id])
-	@@unique([submission_id, question_id])
-	@@map("submission_answers")
-
+  @@unique([submission_id, question_id])
+  @@index([submission_id])
+  @@index([question_id])
+  @@map("submission_answers")
 }
 
 model BehaviorLog {
-	id                   Int              @id @default(autoincrement())
-	submission_answer_id Int
-	submission_answer    SubmissionAnswer @relation(fields: [submission_answer_id], references: [id], onDelete: Cascade)
-	event_type           EventType
-	timestamp            DateTime         @default(now()) @db.Timestamp(0)
-	metadata             Json?
+  id                   Int              @id @default(autoincrement())
+  submission_answer_id Int
+  submission_answer    SubmissionAnswer @relation(fields: [submission_answer_id], references: [id], onDelete: Cascade)
+  event_type           EventType
+  timestamp            DateTime         @default(now()) @db.Timestamp(0)
+  metadata             Json?
 
-	@@index([submission_answer_id])
-	@@map("behaviour_logs")
+  @@index([submission_answer_id])
+  @@map("behaviour_logs")
 }
 
 model QuizAttendance {
-  id         Int @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   quiz_id    Int
-  quiz       Quiz @relation(fields:[quiz_id], references:[id])
+  quiz       Quiz    @relation(fields: [quiz_id], references: [id])
   student_id Int
-  student    User @relation(fields:[student_id], references:[id])
-  status  	 Boolean @default(true)
+  student    User    @relation(fields: [student_id], references: [id])
+  status     Boolean @default(true)
   marked_by  Int?
 
   @@unique([quiz_id, student_id])
-	@@map("quiz_attendances")
+  @@map("quiz_attendances")
 }

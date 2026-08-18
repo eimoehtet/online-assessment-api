@@ -21,6 +21,7 @@ const {
   releaseSubmissionScore,
   getSubmissionsByQuizId,
 } = require("../services/submission.service");
+const { getPagination: getSharedPagination } = require("../utils/pagination");
 
 const allowedEventTypes = [
   "TAB_SWITCH",
@@ -41,19 +42,7 @@ const parsePositiveInt = (value) => {
   return parsed;
 };
 
-const getPagination = (query) => {
-  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(query.limit || "20", 10), 1),
-    100,
-  );
-
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
-};
+const getPagination = (query) => getSharedPagination(query, 20);
 
 const canViewSubmission = (user, submission) => {
   if (user.role === "ADMIN") {
@@ -747,7 +736,6 @@ const getSubmissionsByQuizIdHandler = async (req, res) => {
 
   try {
     const submissions = await getSubmissionsByQuizId(quizId, { skip, take: limit });
-    console.log("Submissions::", submissions);
     return res.status(200).json({
       data: submissions.items,
       meta: {

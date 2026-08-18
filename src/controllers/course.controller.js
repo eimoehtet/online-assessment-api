@@ -9,6 +9,7 @@ const {
   toggleCourseStatus,
 } = require("../services/course.service");
 const { getUserById } = require("../services/user.service");
+const { getPagination, paginationMeta } = require("../utils/pagination");
 
 const allowedRoles = ["ADMIN", "TEACHER"];
 
@@ -48,20 +49,6 @@ const parseTeacherId = (value) => {
   return parsed;
 };
 
-const getPagination = (query) => {
-  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(query.limit || "10", 10), 1),
-    100,
-  );
-
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
-};
-
 const createCourse = async (req, res) => {
   try {
     const { name, code, shift, teacher_id } = req.body;
@@ -76,7 +63,6 @@ const createCourse = async (req, res) => {
     if (!teacherId) {
       return res.status(400).json({ message: "Invalid teacher_id." });
     }
-
     const teacher = await getUserById(teacherId);
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found." });
@@ -164,9 +150,17 @@ const getCourseByTeacherIdHandler = async (req, res) => {
     if (!teacherId) {
       return res.status(400).json({ message: "Invalid teacher_id." });
     }
+    if (teacherId !== req.user.id) {
+      return res.status(403).json({ message: "Teachers can only view their own courses." });
+    }
 
-    const courses = await getCourseByTeacherId(teacherId);
-    return res.status(200).json({ courses });
+    const { page, limit, skip } = getPagination(req.query);
+    const { items, total } = await getCourseByTeacherId(teacherId, { skip, take: limit });
+    return res.status(200).json({
+      courses: items,
+      data: items,
+      meta: paginationMeta({ page, limit, total }),
+    });
   } catch (_error) {
     return res.status(500).json({ message: "Failed to fetch courses." });
   }

@@ -12,6 +12,7 @@ const { getCourseById } = require("../services/course.service");
 const { getUserById, findUserByStudentId } = require("../services/user.service");
 const prisma = require("../config/prisma");
 const bcrypt = require("bcrypt");
+const { getPagination, paginationMeta } = require("../utils/pagination");
 
 const allowedRoles = ["ADMIN","TEACHER", "STUDENT"];
 
@@ -43,20 +44,6 @@ const parseCourseId = (value) => {
   }
 
   return parsed;
-};
-
-const getPagination = (query) => {
-  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(query.limit || "10", 10), 1),
-    100,
-  );
-
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
 };
 
 const getUniqueConflictMessage = (error) => {
@@ -97,7 +84,6 @@ const createEnrollment = async (req, res) => {
       return res.status(404).json({ message: "Student not found or invalid role." });
     }
     const student_id = student.id;
-    console.log("ID of student to enroll:", student_id);
     const enrollment = await createEnrollmentRecord( courseId, student_id, shift );
     return res.status(201).json(enrollment);
   } catch (error) {
@@ -195,7 +181,7 @@ const getEnrollmentsByCourse = async (req, res) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
 
-    const { items, total } = await getEnrollmentsByCourseRecord(courseId);
+    const { items, total } = await getEnrollmentsByCourseRecord(courseId, { skip, take: limit });
 
     return res.status(200).json({
       data: items,
@@ -218,9 +204,14 @@ const getEnrollmentsByStudent = async (req, res) => {
     return res.status(400).json({ message: "Invalid student ID." });
   }
   try {
-    const items = await getEnrollmentsByStudentRecord(studentId);
+    if (req.user.role === "STUDENT" && req.user.id !== studentId) {
+      return res.status(403).json({ message: "Students can only view their own enrollments." });
+    }
+    const { page, limit, skip } = getPagination(req.query);
+    const { items, total } = await getEnrollmentsByStudentRecord(studentId, { skip, take: limit });
     return res.status(200).json({
       data: items,
+      meta: paginationMeta({ page, limit, total }),
     });
   } catch (error) {
     console.error("Error fetching enrollments by student:", error);
