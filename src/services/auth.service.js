@@ -1,9 +1,12 @@
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
+const sessionCache = require("./session-cache");
 
 const ACCESS_TOKEN_TTL = "15m";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const invalidateSessionCache = sessionCache.invalidate;
+const invalidateUserSessionCache = sessionCache.invalidateUser;
 
 const getConfig = () => {
   const accessSecret = process.env.JWT_SECRET;
@@ -105,6 +108,7 @@ const refreshSession = async (refreshToken, csrfToken) => {
   });
 
   if (updated.count !== 1) return null;
+  invalidateSessionCache(session.id);
 
   return {
     accessToken: issueAccessToken(session.user, session.id),
@@ -127,18 +131,36 @@ const revokeSessionFromToken = async (refreshToken, csrfToken) => {
     },
     data: { revokedAt: new Date() },
   });
+  invalidateSessionCache(parsed.sessionId);
   return revoked.count === 1;
 };
 
-const revokeAllUserSessions = (userId) => prisma.authSession.updateMany({
-  where: { user_id: userId, revokedAt: null },
-  data: { revokedAt: new Date() },
-});
+const revokeAllUserSessions = async (userId) => {
+  const result = await prisma.authSession.updateMany({
+    where: { user_id: userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  invalidateUserSessionCache(userId);
+  return result;
+};
 
-const getActiveSessionUser = async (sessionId) => prisma.authSession.findFirst({
-  where: { id: sessionId, revokedAt: null, expiresAt: { gt: new Date() }, user: { status: 1 } },
-  include: { user: true },
-});
+const getActiveSessionUser = async (sessionId) => {
+  const now = Date.now();
+  const cached = sessionCache.get(sessionId, now);
+  if (cached) return cached;
+
+  const record = await prisma.authSession.findFirst({
+    where: { id: sessionId, revokedAt: null, expiresAt: { gt: new Date(now) }, user: { status: 1 } },
+    select: {
+      id: true,
+      user_id: true,
+      expiresAt: true,
+      user: { select: { id: true, email: true, role: true, status: true } },
+    },
+  });
+  if (record) sessionCache.set(sessionId, record, now);
+  return record;
+};
 
 module.exports = {
   ACCESS_TOKEN_TTL,
@@ -150,4 +172,6 @@ module.exports = {
   revokeSessionFromToken,
   revokeAllUserSessions,
   getActiveSessionUser,
+  invalidateSessionCache,
+  invalidateUserSessionCache,
 };

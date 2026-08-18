@@ -42,11 +42,13 @@ const getCourseById = async (id) => {
   });
 };
 
-const getCourseByTeacherId = async (teacher_id) => {
-  return prisma.course.findMany({
-    where: { teacher_id },
-    include: coursePublicInclude,
-  });
+const getCourseByTeacherId = async (teacher_id, { skip, take } = {}) => {
+  const where = { teacher_id };
+  const [items, total] = await Promise.all([
+    prisma.course.findMany({ where, skip, take, orderBy: { id: "asc" }, include: coursePublicInclude }),
+    prisma.course.count({ where }),
+  ]);
+  return { items, total };
 };
 
 const findCourseByCode = async (code) => {

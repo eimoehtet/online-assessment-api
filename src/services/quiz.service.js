@@ -148,36 +148,49 @@ const deleteQuestionById = async (id) => {
   });
 };
 
-const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId) => {
-  // find the course_id from the quizId and teacherId
-  const course = await prisma.course.findFirst({
-    where: {
-      quizzes: {
-        some: {
-          id: parseInt(quizId, 10),
-          teacher_id: parseInt(teacherId, 10),
-        },
-      }
-    },
+const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId, { skip, take } = {}) => {
+  const quiz = await prisma.quiz.findFirst({
+    where: { id: quizId, teacher_id: teacherId },
+    select: { course_id: true },
   });
 
-  if (!course) {
+  if (!quiz) {
     throw new Error("Course not found for the given quizId and teacherId.");
   }
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { course_id: course.id },
-    include: {
-      student: true,
-    },
-  });
+  const where = { course_id: quiz.course_id };
+  const [items, total] = await Promise.all([
+    prisma.enrollment.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        course_id: true,
+        student_id: true,
+        shift: true,
+        student: {
+          select: {
+            id: true, name: true, email: true, student_id: true,
+            phone_number: true, gender: true, address: true, date_of_birth: true, status: true,
+          },
+        },
+      },
+    }),
+    prisma.enrollment.count({ where }),
+  ]);
 
-  return enrollments;
+  return { items, total };
 };
 
 const getAllQuizzesReportByAdmin = async ({ skip, take } = {}) => {
-  const quizzes = await prisma.quiz.findMany({
-    include: {
+  const [quizzes, total] = await Promise.all([
+    prisma.quiz.findMany({
+      skip,
+      take,
+      orderBy: { id: "desc" },
+      include: {
       teacher: {
         select: {
           name: true,
@@ -190,54 +203,30 @@ const getAllQuizzesReportByAdmin = async ({ skip, take } = {}) => {
           shift: true,
         },
       },
-    },
-  });
-
-  const enrollments = await prisma.enrollment.findMany({
-    where: {
-      course_id: {
-        in: quizzes.map((quiz) => quiz.course.id),
       },
-    },
-  });
+    }),
+    prisma.quiz.count(),
+  ]);
 
-  const submissions = await prisma.submission.findMany({
-    where: {
-      quiz_id: {
-        in: quizzes.map((quiz) => quiz.id),
-      },
-    },
-    select: {
-      quiz_id: true,
-      student_id: true,
-    },
-  });
+  if (quizzes.length === 0) return { items: [], total };
 
-  // Map enrollments by course_id for quick lookup
-  const enrollmentsByCourseId = enrollments.reduce((acc, enrollment) => {
-    if (!acc[enrollment.course_id]) {
-      acc[enrollment.course_id] = [];
-    }
-    acc[enrollment.course_id].push(enrollment.student);
-    return acc;
-  }, {});
+  const courseIds = [...new Set(quizzes.map((quiz) => quiz.course_id))];
+  const quizIds = quizzes.map((quiz) => quiz.id);
 
-  // Map submissions by quiz_id for quick lookup
-  const submissionsByQuizId = submissions.reduce((acc, submission) => {
-    if (!acc[submission.quiz_id]) {
-      acc[submission.quiz_id] = [];
-    }
-    acc[submission.quiz_id].push(submission);
-    return acc;
-  }, {});
+  const [enrollmentCounts, uniqueAttendees] = await Promise.all([
+    prisma.enrollment.groupBy({ by: ["course_id"], where: { course_id: { in: courseIds } }, _count: { _all: true } }),
+    prisma.submission.groupBy({ by: ["quiz_id", "student_id"], where: { quiz_id: { in: quizIds } } }),
+  ]);
+  const enrollmentsByCourseId = new Map(enrollmentCounts.map((row) => [row.course_id, row._count._all]));
+  const attendeesByQuizId = uniqueAttendees.reduce((counts, row) => {
+    counts.set(row.quiz_id, (counts.get(row.quiz_id) || 0) + 1);
+    return counts;
+  }, new Map());
 
   const reports = quizzes.map((quiz) => {
-    const key = `${quiz.course.id}-${quiz.teacher_id}-${quiz.course.shift}`;
-
-    const numberOfStudents = enrollmentsByCourseId[quiz.course.id]?.length || 0;
-
-    const attendees = submissionsByQuizId[quiz.id]?.length || 0;
-    const absences = numberOfStudents - attendees;
+    const numberOfStudents = enrollmentsByCourseId.get(quiz.course.id) || 0;
+    const attendees = attendeesByQuizId.get(quiz.id) || 0;
+    const absences = Math.max(numberOfStudents - attendees, 0);
 
     return {
       quiz_id: quiz.id,
@@ -251,7 +240,7 @@ const getAllQuizzesReportByAdmin = async ({ skip, take } = {}) => {
     };
   });
 
-  return reports;
+  return { items: reports, total };
 };
 
 module.exports = {

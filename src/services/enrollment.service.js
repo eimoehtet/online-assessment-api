@@ -77,10 +77,13 @@ const getEnrollmentById = async (id) => {
   });
 };
 
-const getEnrollmentsByCourse = async (courseId) => {
+const getEnrollmentsByCourse = async (courseId, { skip, take } = {}) => {
   const [items, total] = await Promise.all([
     prisma.enrollment.findMany({
-    where: { course_id: courseId },
+      where: { course_id: courseId },
+      skip,
+      take,
+      orderBy: { id: "asc" },
       include: publicInclude,
     }),
     prisma.enrollment.count({ where: { course_id: courseId } }),
@@ -89,11 +92,13 @@ const getEnrollmentsByCourse = async (courseId) => {
   return { items, total };
 };
 
-const getEnrollmentsByStudent = async (studentId) => {
-  return prisma.enrollment.findMany({
-    where: { student_id: studentId },
-    include: publicInclude,
-  });
+const getEnrollmentsByStudent = async (studentId, { skip, take } = {}) => {
+  const where = { student_id: studentId };
+  const [items, total] = await Promise.all([
+    prisma.enrollment.findMany({ where, skip, take, orderBy: { id: "asc" }, include: publicInclude }),
+    prisma.enrollment.count({ where }),
+  ]);
+  return { items, total };
 };
 
 const updateEnrollment = async (id, course_id, student_id, shift) => {

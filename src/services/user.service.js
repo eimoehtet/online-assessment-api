@@ -136,10 +136,14 @@ const changePassword = async(id, currentPassword, newPassword) => {
 
 }
 
-const revokeAllUserSessions = (id) => prisma.authSession.updateMany({
-  where: { user_id: id, revokedAt: null },
-  data: { revokedAt: new Date() },
-});
+const revokeAllUserSessions = async (id) => {
+  const result = await prisma.authSession.updateMany({
+    where: { user_id: id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  require("./auth.service").invalidateUserSessionCache(id);
+  return result;
+};
 
 const toggleUserStatus = async (id) => {
   const user = await prisma.user.findUnique({
@@ -151,7 +155,6 @@ const toggleUserStatus = async (id) => {
   }
 
   const newStatus = user?.status === 1 ? 0 : 1;
-  console.log(`Current status: ${user.status}, New status: ${newStatus}`); // Debugging line
   return prisma.user.update({
     where: { id },
     data: { status: newStatus },

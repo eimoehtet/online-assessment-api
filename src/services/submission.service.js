@@ -70,7 +70,7 @@ const parseAnswerTokens = (value) => {
           return parsed.map(normalizeText).filter(Boolean).sort();
         }
       } catch (_error) {
-        console.log("Failed to parse answer tokens as JSON array, falling back to comma-separated parsing.");  
+        // Fall back to comma-separated parsing for legacy answers.
       }
     }
 
@@ -131,6 +131,7 @@ const getQuizForAttempt = async (quizId) => {
       course_id: true,
       status: true,
       time_limit: true,
+      end_date: true,
       allowed_attempts: true,
     },
   });
@@ -163,7 +164,7 @@ const createSubmission = async ({ student_id, quiz_id }) => {
     throw error;
   }
 
-  if (quiz.time_limit <= new Date()) {
+  if (quiz.end_date <= new Date()) {
     const error = new Error("Quiz deadline has passed.");
     error.code = "QUIZ_DEADLINE_PASSED";
     throw error;
@@ -725,7 +726,6 @@ const releaseSubmissionScore = async (submission_id) => {
 };
 
 const getSubmissionsByQuizId = async (quizId, { skip, take }) => {
-  console.log("Quiz ID received in getSubmissionsByQuizId:", quizId);
   const [items, total] = await Promise.all([
     prisma.submission.findMany({
       where: { quiz_id: quizId },
