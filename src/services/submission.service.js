@@ -181,6 +181,23 @@ const createSubmission = async ({ student_id, quiz_id }) => {
     throw error;
   }
 
+  const attemptCount = await prisma.submission.count({
+    where: {
+      student_id,
+      quiz_id,
+    },
+  });
+
+  if (attemptCount >= quiz.allowed_attempts) {
+    const error = new Error(
+      quiz.allowed_attempts === 1
+        ? "You have already attempted this quiz."
+        : `You have reached the maximum of ${quiz.allowed_attempts} attempts for this quiz.`,
+    );
+    error.code = "ATTEMPT_LIMIT_REACHED";
+    throw error;
+  }
+
   return prisma.submission.create({
     data: {
       student_id,
