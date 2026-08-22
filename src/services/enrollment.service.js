@@ -6,6 +6,13 @@ const publicInclude = {
       id: true,
       name: true,
       code: true,
+      teacher: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
     },
   },
   student: {
