@@ -85,7 +85,7 @@ const getUniqueConflictMessage = (error) => {
   }
 
   if (combined.includes("student_id") || combined.includes("student")) {
-    return "Student ID already in use.";
+    return "Student/Teacher ID already in use.";
   }
 
   return "Duplicate value already exists.";
@@ -99,6 +99,18 @@ const parseUserId = (value) => {
   }
 
   return parsed;
+};
+
+const normalizeOptionalString = (value) => {
+  if (value === undefined || value === null) return null;
+  return typeof value === "string" && value.trim() === "" ? null : value;
+};
+
+const parseOptionalDate = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
 const login = async (req, res) => {
@@ -189,21 +201,37 @@ const createUserByAdmin = async (req, res) => {
       address,
     } = req.body;
 
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !role ||
-      !phone_number ||
-      !date_of_birth ||
-      !gender ||
-      !address
-    ) {
-      return res.status(400).json({ message: "Missing required fields." });
+    if(!name){
+      return res.status(400).json({ message: "Name is required." });
     }
-
+    if(!email){
+      return res.status(400).json({ message: "Email is required." });
+    }
+    if(!password){
+      return res.status(400).json({ message: "Password is required." });
+    }
+    if (typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long." });
+    }
+    if(!role){
+      return res.status(400).json({ message: "Role is required." });
+    }
+    if(!gender){
+      return res.status(400).json({ message: "Gender is required." });
+    }
+    if(!student_id && role === "STUDENT"){
+      return res.status(400).json({ message: "Student ID is required for students." });
+    }
+    if(!student_id && role === "TEACHER"){
+      return res.status(400).json({ message: "Teacher ID is required for teachers." });
+    }
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ message: "Invalid role." });
+    }
+
+    const parsedDateOfBirth = parseOptionalDate(date_of_birth);
+    if (parsedDateOfBirth === undefined) {
+      return res.status(400).json({ message: "Date of birth is invalid." });
     }
 
     const existingUser = await findUserByEmail(email);
@@ -219,10 +247,10 @@ const createUserByAdmin = async (req, res) => {
       password: hashedPassword,
       role,
       student_id,
-      phone_number,
-      date_of_birth: new Date(date_of_birth),
+      phone_number: normalizeOptionalString(phone_number),
+      date_of_birth: parsedDateOfBirth,
       gender,
-      address,
+      address: normalizeOptionalString(address),
     });
 
     return res.status(201).json({
@@ -356,9 +384,15 @@ const updateUserByAdmin = async (req, res) => {
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
     if (student_id !== undefined) data.student_id = student_id;
-    if (phone_number !== undefined) data.phone_number = phone_number;
-    if (address !== undefined) data.address = address;
-    if (date_of_birth !== undefined) data.date_of_birth = new Date(date_of_birth);
+    if (phone_number !== undefined) data.phone_number = normalizeOptionalString(phone_number);
+    if (address !== undefined) data.address = normalizeOptionalString(address);
+    if (date_of_birth !== undefined) {
+      const parsedDateOfBirth = parseOptionalDate(date_of_birth);
+      if (parsedDateOfBirth === undefined) {
+        return res.status(400).json({ message: "Date of birth is invalid." });
+      }
+      data.date_of_birth = parsedDateOfBirth;
+    }
     if (gender !== undefined) data.gender = gender;
 
     if (role !== undefined) {
@@ -369,6 +403,9 @@ const updateUserByAdmin = async (req, res) => {
     }
 
     if (password !== undefined) {
+      if (typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long." });
+      }
       data.password = await bcrypt.hash(password, 10);
     }
 
@@ -425,7 +462,10 @@ const resetUserPasswordByAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid user id." });
     }
 
-    const defaultPassword = req.body.newPassword || "Default@123"; 
+    const defaultPassword = req.body.newPassword || "Default@123";
+    if (typeof defaultPassword !== "string" || defaultPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long." });
+    }
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
     await updateUserById(userId, { password: hashedPassword });
@@ -446,6 +486,9 @@ const changePasswordByUser = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "Current and new passwords are required." });
+    }
+    if (typeof newPassword !== "string" || newPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long." });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
