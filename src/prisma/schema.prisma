@@ -64,9 +64,9 @@ model User {
   student_id             String?          @unique
   gender                 Gender?
   major                  String?
-  phone_number           String           @unique
-  date_of_birth          DateTime         @db.Date
-  address                String
+  phone_number           String?           @unique
+  date_of_birth          DateTime?         @db.Date
+  address                String?
   courses                Course[]
   quizzes                Quiz[]
   enrollments            Enrollment[]
