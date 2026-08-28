@@ -236,6 +236,16 @@ const validateQuestionPayload = ({
       };
     }
 
+    if (questionType === "TRUE_FALSE") {
+      const optionTexts = effectiveOptions.map((option) => option.option_text);
+      if (optionTexts[0] !== "TRUE" || optionTexts[1] !== "FALSE") {
+        return {
+          ok: false,
+          message: "TRUE_FALSE options must be exactly TRUE and FALSE, in that order.",
+        };
+      }
+    }
+
     const correctCount = effectiveOptions.filter(
       (opt) => opt.is_correct,
     ).length;
