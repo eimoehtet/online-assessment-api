@@ -101,7 +101,7 @@ const parseUserId = (value) => {
   return parsed;
 };
 
-<<<<<<< Updated upstream
+  
 const normalizeOptionalString = (value) => {
   if (value === undefined || value === null) return null;
   return typeof value === "string" && value.trim() === "" ? null : value;
@@ -114,8 +114,7 @@ const parseOptionalDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
-=======
->>>>>>> Stashed changes
+
 const login = async (req, res) => {
   try {
   const { email, password } = req.body;

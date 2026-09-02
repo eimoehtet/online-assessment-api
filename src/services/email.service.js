@@ -14,7 +14,7 @@ const createTransporter = () => {
 
 const sendResetPasswordEmail = async (toEmail, resetToken, userName = "User") => {
   const transporter = createTransporter();
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  const frontendUrl = (process.env.FRONTEND_ORIGINS || "http://localhost:5173").split(",")[0].trim();
   const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   const mailOptions = {
