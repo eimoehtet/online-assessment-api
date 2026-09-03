@@ -15,12 +15,14 @@ const submissionPublicInclude = {
       id: true,
       title: true,
       status: true,
+      allowed_attempts: true,
       course: {
         select: {
           id: true,
           name: true,
           code: true,
           teacher_id: true,
+          teacher: { select: { id: true, name: true } },
         },
       },
     },
@@ -131,6 +133,7 @@ const getQuizForAttempt = async (quizId) => {
       course_id: true,
       status: true,
       time_limit: true,
+      start_date: true,
       end_date: true,
       allowed_attempts: true,
     },
@@ -161,6 +164,12 @@ const createSubmission = async ({ student_id, quiz_id }) => {
   if (quiz.status !== "PUBLISHED") {
     const error = new Error("Quiz is not available yet.");
     error.code = "QUIZ_NOT_PUBLISHED";
+    throw error;
+  }
+
+  if (quiz.start_date > new Date()) {
+    const error = new Error("Quiz is not available yet.");
+    error.code = "QUIZ_NOT_STARTED";
     throw error;
   }
 
@@ -231,6 +240,7 @@ const getSubmissionById = async (id) => {
         select: {
           id: true,
           title: true,
+          allowed_attempts: true,
           questions: { select: { points: true } },
           course: {
             select: {
@@ -238,6 +248,7 @@ const getSubmissionById = async (id) => {
               name: true,
               code: true,
               teacher_id: true,
+              teacher: { select: { id: true, name: true } },
             },
           },
         },
@@ -315,8 +326,9 @@ const listSubmissions = async ({
           id: true,
           title: true,
           status: true,
+          allowed_attempts: true,
           questions: { select: { points: true } },
-          course: { select: { id: true, name: true, code: true, teacher_id: true } },
+          course: { select: { id: true, name: true, code: true, teacher_id: true, teacher: { select: { id: true, name: true } } } },
         },
       },
       answers: {
@@ -334,6 +346,22 @@ const listSubmissions = async ({
       event_type: true,
       submission_answer: { select: { submission_id: true } },
     },
+  });
+  const attemptRows = candidates.length === 0 ? [] : await prisma.submission.findMany({
+    where: {
+      student_id: { in: [...new Set(candidates.map((item) => item.student_id))] },
+      quiz_id: { in: [...new Set(candidates.map((item) => item.quiz_id))] },
+    },
+    select: { id: true, student_id: true, quiz_id: true },
+    orderBy: { id: "asc" },
+  });
+  const attemptNumberById = new Map();
+  const attemptCounters = new Map();
+  attemptRows.forEach((attempt) => {
+    const key = `${attempt.student_id}:${attempt.quiz_id}`;
+    const number = (attemptCounters.get(key) || 0) + 1;
+    attemptCounters.set(key, number);
+    attemptNumberById.set(attempt.id, number);
   });
   const integrityBySubmission = new Map();
   logs.forEach((log) => {
@@ -362,6 +390,7 @@ const listSubmissions = async ({
       },
       current_score: currentScore,
       percentage: maximumScore > 0 ? Math.round((currentScore / maximumScore) * 1000) / 10 : null,
+      attempt_number: attemptNumberById.get(submission.id) || 1,
       behaviorSummary: integrity,
     };
   });
@@ -374,6 +403,9 @@ const listSubmissions = async ({
     released: summarySource.filter((item) => item.status === "RELEASED").length,
     in_progress: summarySource.filter((item) => item.status === "IN_PROGRESS").length,
     high_risk: summarySource.filter((item) => item.behaviorSummary.risk_level === "HIGH").length,
+    awaiting_review: summarySource.filter((item) => ["SUBMITTED", "IN_REVIEW", "GRADED"].includes(item.status)).length,
+    released_average: (() => { const values = summarySource.filter((item) => item.status === "RELEASED" && item.percentage !== null).map((item) => item.percentage); return values.length ? Math.round(values.reduce((sum, score) => sum + score, 0) / values.length * 10) / 10 : null; })(),
+    released_highest: (() => { const values = summarySource.filter((item) => item.status === "RELEASED" && item.percentage !== null).map((item) => item.percentage); return values.length ? Math.max(...values) : null; })(),
   };
 
   let filtered = enriched.filter((item) => {
@@ -382,6 +414,8 @@ const listSubmissions = async ({
     if (workflow === "READY_TO_RELEASE") return item.status === "GRADED";
     if (workflow === "RELEASED") return item.status === "RELEASED";
     if (workflow === "IN_PROGRESS") return item.status === "IN_PROGRESS";
+    if (workflow === "COMPLETED") return item.status !== "IN_PROGRESS";
+    if (workflow === "AWAITING_REVIEW") return ["SUBMITTED", "IN_REVIEW", "GRADED"].includes(item.status);
     return true;
   });
 

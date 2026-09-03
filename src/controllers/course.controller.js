@@ -4,6 +4,8 @@ const {
   getCourseById,
   getCourseByTeacherId,
   getCourseRoster,
+  getCoursesForStudent,
+  getCourseQuizzesForStudent,
   findCourseByCode,
   updateCourseById,
   deleteCourseById,
@@ -217,6 +219,28 @@ const getCourseRosterHandler = async (req, res) => {
   }
 };
 
+const getStudentCoursesHandler = async (req, res) => {
+  try {
+    return res.status(200).json({ data: await getCoursesForStudent(req.user.id) });
+  } catch (error) {
+    console.error("Error fetching student courses:", error);
+    return res.status(500).json({ message: "Failed to fetch your courses." });
+  }
+};
+
+const getStudentCourseQuizzesHandler = async (req, res) => {
+  const courseId = parseCourseId(req.params.id);
+  if (!courseId) return res.status(400).json({ message: "Invalid course id." });
+  try {
+    const result = await getCourseQuizzesForStudent(req.user.id, courseId);
+    if (!result) return res.status(404).json({ message: "Course not found or you are not enrolled." });
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error fetching student course quizzes:", error);
+    return res.status(500).json({ message: "Failed to fetch course quizzes." });
+  }
+};
+
 const updateCourse = async (req, res) => {
   try {
     const courseId = parseCourseId(req.params.id);
@@ -344,6 +368,8 @@ module.exports = {
   getCourseById: getCourseByIdHandler,
   getCourseByTeacherId: getCourseByTeacherIdHandler,
   getCourseRoster: getCourseRosterHandler,
+  getStudentCourses: getStudentCoursesHandler,
+  getStudentCourseQuizzes: getStudentCourseQuizzesHandler,
   updateCourse,
   deleteCourse,
   getUniqueConflictMessage,

@@ -103,8 +103,9 @@ const canReviewSubmission = (user, submission) =>
   (user.role === "TEACHER" && submission.quiz?.course?.teacher_id === user.id);
 
 const hideUnreleasedScores = (submission) => {
-  if (submission.status === "RELEASED") return submission;
-  const { total_score, auto_score, manual_score, feedback, answers, ...safeSubmission } = submission;
+  const { behaviorSummary, ...studentSubmission } = submission;
+  if (submission.status === "RELEASED") return studentSubmission;
+  const { total_score, auto_score, manual_score, current_score, percentage, feedback, answers, ...safeSubmission } = studentSubmission;
   return {
     ...safeSubmission,
     ...(answers ? { answers: hideUnreleasedAnswerScores(answers, false) } : {}),
@@ -139,11 +140,11 @@ const listSubmissionsHandler = async (req, res) => {
     return res.status(400).json({ message: "Invalid course_id filter." });
   }
 
-  const allowedWorkflows = ["NEEDS_GRADING", "READY_TO_RELEASE", "RELEASED", "IN_PROGRESS", "ALL"];
+  const allowedWorkflows = ["NEEDS_GRADING", "READY_TO_RELEASE", "RELEASED", "IN_PROGRESS", "COMPLETED", "AWAITING_REVIEW", "ALL"];
   const allowedRiskLevels = ["LOW", "MEDIUM", "HIGH"];
   const allowedSorts = ["submitted_at", "student", "score", "risk"];
   const workflow = req.query.workflow || "ALL";
-  const riskLevel = req.query.risk_level;
+  const riskLevel = req.user.role === "STUDENT" ? undefined : req.query.risk_level;
   const sort = req.query.sort || "submitted_at";
   const order = req.query.order === "asc" ? "asc" : "desc";
   if (!allowedWorkflows.includes(workflow)) return res.status(400).json({ message: "Invalid workflow filter." });
@@ -188,7 +189,13 @@ const listSubmissionsHandler = async (req, res) => {
         total,
         totalPages: Math.ceil(total / limit),
       },
-      summary,
+      summary: req.user.role === "STUDENT" ? {
+        total: summary.total,
+        awaiting_review: summary.awaiting_review,
+        released: summary.released,
+        released_average: summary.released_average,
+        released_highest: summary.released_highest,
+      } : summary,
     });
   } catch (error) {
     console.error("Error listing submissions:", error);
@@ -277,6 +284,10 @@ const startSubmission = async (req, res) => {
     }
 
     if (error.code === "QUIZ_DEADLINE_PASSED") {
+      return res.status(409).json({ message: error.message });
+    }
+
+    if (error.code === "QUIZ_NOT_STARTED") {
       return res.status(409).json({ message: error.message });
     }
 
@@ -803,6 +814,7 @@ const getSubmissionsByQuizIdHandler = async (req, res) => {
 module.exports = {
   allowedEventTypes,
   canReviewSubmission,
+  hideUnreleasedScores,
   listSubmissionsHandler,
   startSubmission,
   finishSubmission,
