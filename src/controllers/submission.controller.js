@@ -20,6 +20,7 @@ const {
   completeSubmissionReview,
   releaseSubmissionScore,
   getSubmissionsByQuizId,
+  getQuizSubmissionInsights,
 } = require("../services/submission.service");
 const { getPagination: getSharedPagination } = require("../utils/pagination");
 
@@ -43,6 +44,21 @@ const parsePositiveInt = (value) => {
 };
 
 const getPagination = (query) => getSharedPagination(query, 20);
+
+const getQuizSubmissionInsightsHandler = async (req, res) => {
+  const quizId = parsePositiveInt(req.params.quizId);
+  if (!quizId) return res.status(400).json({ message: "Invalid quiz id." });
+  try {
+    const insights = await getQuizSubmissionInsights(quizId);
+    if (!insights) return res.status(404).json({ message: "Quiz not found." });
+    if (req.user.role !== "ADMIN" && insights.teacher_id !== req.user.id) return res.status(403).json({ message: "Forbidden" });
+    const { teacher_id, ...response } = insights;
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error fetching quiz submission insights:", error);
+    return res.status(500).json({ message: "Failed to fetch quiz insights." });
+  }
+};
 
 const canViewSubmission = (user, submission) => {
   if (user.role === "ADMIN") {
@@ -110,6 +126,7 @@ const listSubmissionsHandler = async (req, res) => {
     req.query.student_id !== undefined
       ? parsePositiveInt(req.query.student_id)
       : undefined;
+  const courseId = req.query.course_id !== undefined ? parsePositiveInt(req.query.course_id) : undefined;
 
   if (req.query.quiz_id !== undefined && !quizId) {
     return res.status(400).json({ message: "Invalid quiz_id filter." });
@@ -118,18 +135,49 @@ const listSubmissionsHandler = async (req, res) => {
   if (req.query.student_id !== undefined && !studentIdFromQuery) {
     return res.status(400).json({ message: "Invalid student_id filter." });
   }
+  if (req.query.course_id !== undefined && !courseId) {
+    return res.status(400).json({ message: "Invalid course_id filter." });
+  }
+
+  const allowedWorkflows = ["NEEDS_GRADING", "READY_TO_RELEASE", "RELEASED", "IN_PROGRESS", "ALL"];
+  const allowedRiskLevels = ["LOW", "MEDIUM", "HIGH"];
+  const allowedSorts = ["submitted_at", "student", "score", "risk"];
+  const workflow = req.query.workflow || "ALL";
+  const riskLevel = req.query.risk_level;
+  const sort = req.query.sort || "submitted_at";
+  const order = req.query.order === "asc" ? "asc" : "desc";
+  if (!allowedWorkflows.includes(workflow)) return res.status(400).json({ message: "Invalid workflow filter." });
+  if (riskLevel && !allowedRiskLevels.includes(riskLevel)) return res.status(400).json({ message: "Invalid risk_level filter." });
+  if (!allowedSorts.includes(sort)) return res.status(400).json({ message: "Invalid sort option." });
+
+  const parseDateFilter = (value, endOfDay = false) => {
+    if (!value) return undefined;
+    const date = new Date(endOfDay ? `${value}T23:59:59.999Z` : `${value}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const submittedFrom = parseDateFilter(req.query.submitted_from);
+  const submittedTo = parseDateFilter(req.query.submitted_to, true);
+  if (submittedFrom === null || submittedTo === null) return res.status(400).json({ message: "Invalid submission date filter." });
 
   const studentId =
     req.user.role === "STUDENT" ? req.user.id : studentIdFromQuery;
   const teacherId = req.user.role === "TEACHER" ? req.user.id : undefined;
 
   try {
-    const { items, total } = await listSubmissions({
+    const { items, total, summary } = await listSubmissions({
       skip,
       take: limit,
       quiz_id: quizId,
+      course_id: courseId,
       student_id: studentId,
       teacher_id: teacherId,
+      search: typeof req.query.search === "string" ? req.query.search.trim() : "",
+      workflow,
+      risk_level: riskLevel,
+      submitted_from: submittedFrom,
+      submitted_to: submittedTo,
+      sort,
+      order,
     });
 
     return res.status(200).json({
@@ -140,6 +188,7 @@ const listSubmissionsHandler = async (req, res) => {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      summary,
     });
   } catch (error) {
     console.error("Error listing submissions:", error);
@@ -753,6 +802,7 @@ const getSubmissionsByQuizIdHandler = async (req, res) => {
 
 module.exports = {
   allowedEventTypes,
+  canReviewSubmission,
   listSubmissionsHandler,
   startSubmission,
   finishSubmission,
@@ -772,4 +822,5 @@ module.exports = {
   getBehaviorLogByIdHandler,
   deleteBehaviorLogByIdHandler,
   getSubmissionsByQuizIdHandler,
+  getQuizSubmissionInsightsHandler,
 };

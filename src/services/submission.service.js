@@ -231,13 +231,19 @@ const getSubmissionById = async (id) => {
         select: {
           id: true,
           title: true,
+          questions: { select: { points: true } },
           course: {
             select: {
               id: true,
+              name: true,
+              code: true,
               teacher_id: true,
             },
           },
         },
+      },
+      student: {
+        select: { id: true, name: true, email: true, student_id: true },
       },
       answers: {
         include: {
@@ -246,6 +252,8 @@ const getSubmissionById = async (id) => {
               id: true,
               question_text: true,
               question_type: true,
+              question_order: true,
+              points: true,
             },
           },
         },
@@ -254,37 +262,142 @@ const getSubmissionById = async (id) => {
   });
 };
 
-const listSubmissions = async ({ skip, take, student_id, quiz_id, teacher_id }) => {
+const riskLevelForScore = (score) => score >= 20 ? "HIGH" : score >= 10 ? "MEDIUM" : "LOW";
+
+const listSubmissions = async ({
+  skip,
+  take,
+  student_id,
+  quiz_id,
+  course_id,
+  teacher_id,
+  search,
+  workflow,
+  risk_level,
+  submitted_from,
+  submitted_to,
+  sort = "submitted_at",
+  order = "desc",
+}) => {
   const where = {};
 
   if (student_id !== undefined) {
     where.student_id = student_id;
   }
 
-  if (quiz_id !== undefined) {
-    where.quiz_id = quiz_id;
-  }
-
-  if (teacher_id !== undefined) {
+  if (quiz_id !== undefined) where.quiz_id = quiz_id;
+  if (course_id !== undefined || teacher_id !== undefined) {
     where.quiz = {
-      course: {
-        teacher_id,
-      },
+      ...(course_id !== undefined ? { course_id } : {}),
+      ...(teacher_id !== undefined ? { course: { teacher_id } } : {}),
+    };
+  }
+  if (search) {
+    where.OR = [
+      { student: { name: { contains: search } } },
+      { student: { email: { contains: search } } },
+      { student: { student_id: { contains: search } } },
+    ];
+  }
+  if (submitted_from || submitted_to) {
+    where.submitted_at = {
+      ...(submitted_from ? { gte: submitted_from } : {}),
+      ...(submitted_to ? { lte: submitted_to } : {}),
     };
   }
 
-  const [items, total] = await Promise.all([
-    prisma.submission.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { id: "desc" },
-      include: submissionPublicInclude,
-    }),
-    prisma.submission.count({ where }),
-  ]);
+  const candidates = await prisma.submission.findMany({
+    where,
+    include: {
+      ...submissionPublicInclude,
+      quiz: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          questions: { select: { points: true } },
+          course: { select: { id: true, name: true, code: true, teacher_id: true } },
+        },
+      },
+      answers: {
+        select: {
+          teacher_points_awarded: true,
+          question: { select: { question_type: true } },
+        },
+      },
+    },
+  });
 
-  return { items, total };
+  const logs = candidates.length === 0 ? [] : await prisma.behaviorLog.findMany({
+    where: { submission_answer: { submission_id: { in: candidates.map((item) => item.id) } } },
+    select: {
+      event_type: true,
+      submission_answer: { select: { submission_id: true } },
+    },
+  });
+  const integrityBySubmission = new Map();
+  logs.forEach((log) => {
+    const submissionId = log.submission_answer.submission_id;
+    const summary = integrityBySubmission.get(submissionId) || { total_events: 0, suspicious_events: 0, risk_score: 0, event_counts: {} };
+    summary.total_events += 1;
+    summary.event_counts[log.event_type] = (summary.event_counts[log.event_type] || 0) + 1;
+    const weight = eventRiskWeights[log.event_type] || 0;
+    if (weight > 0) summary.suspicious_events += 1;
+    summary.risk_score += weight;
+    integrityBySubmission.set(submissionId, summary);
+  });
+
+  const enriched = candidates.map(({ answers, quiz, ...submission }) => {
+    const manualAnswers = answers.filter((answer) => ["SHORT_Q", "LONG_Q"].includes(answer.question.question_type));
+    const integrity = integrityBySubmission.get(submission.id) || { total_events: 0, suspicious_events: 0, risk_score: 0, event_counts: {} };
+    integrity.risk_level = riskLevelForScore(integrity.risk_score);
+    const maximumScore = quiz.questions.reduce((sum, question) => sum + (question.points || 0), 0);
+    const currentScore = (submission.auto_score || 0) + (submission.manual_score || 0);
+    return {
+      ...submission,
+      quiz: { ...quiz, questions: undefined, maximum_score: maximumScore },
+      manual_grading: {
+        total: manualAnswers.length,
+        remaining: manualAnswers.filter((answer) => answer.teacher_points_awarded === null).length,
+      },
+      current_score: currentScore,
+      percentage: maximumScore > 0 ? Math.round((currentScore / maximumScore) * 1000) / 10 : null,
+      behaviorSummary: integrity,
+    };
+  });
+
+  const summarySource = enriched;
+  const summary = {
+    total: summarySource.length,
+    needs_grading: summarySource.filter((item) => ["SUBMITTED", "IN_REVIEW"].includes(item.status)).length,
+    ready_to_release: summarySource.filter((item) => item.status === "GRADED").length,
+    released: summarySource.filter((item) => item.status === "RELEASED").length,
+    in_progress: summarySource.filter((item) => item.status === "IN_PROGRESS").length,
+    high_risk: summarySource.filter((item) => item.behaviorSummary.risk_level === "HIGH").length,
+  };
+
+  let filtered = enriched.filter((item) => {
+    if (risk_level && item.behaviorSummary.risk_level !== risk_level) return false;
+    if (workflow === "NEEDS_GRADING") return ["SUBMITTED", "IN_REVIEW"].includes(item.status);
+    if (workflow === "READY_TO_RELEASE") return item.status === "GRADED";
+    if (workflow === "RELEASED") return item.status === "RELEASED";
+    if (workflow === "IN_PROGRESS") return item.status === "IN_PROGRESS";
+    return true;
+  });
+
+  const direction = order === "asc" ? 1 : -1;
+  filtered.sort((left, right) => {
+    let a;
+    let b;
+    if (sort === "student") [a, b] = [left.student?.name || "", right.student?.name || ""];
+    else if (sort === "score") [a, b] = [left.percentage ?? -1, right.percentage ?? -1];
+    else if (sort === "risk") [a, b] = [left.behaviorSummary.risk_score, right.behaviorSummary.risk_score];
+    else [a, b] = [new Date(left.completed_at || left.submitted_at), new Date(right.completed_at || right.submitted_at)];
+    return (typeof a === "string" ? a.localeCompare(b) : a > b ? 1 : a < b ? -1 : 0) * direction;
+  });
+
+  const total = filtered.length;
+  return { items: filtered.slice(skip, skip + take), total, summary };
 };
 
 const deleteSubmissionById = async (id) => {
@@ -374,6 +487,7 @@ const upsertAnswer = async ({ submission_id, question_id, student_answer }) => {
           id: true,
           question_text: true,
           question_type: true,
+          question_order: true,
           points: true,
         },
       },
@@ -415,6 +529,7 @@ const listSubmissionAnswers = async ({ submission_id }) => {
           id: true,
           question_text: true,
           question_type: true,
+          question_order: true,
           points: true,
         },
       },
@@ -431,6 +546,7 @@ const getSubmissionAnswerById = async (id) => {
           id: true,
           question_text: true,
           question_type: true,
+          question_order: true,
           points: true,
         },
       },
@@ -700,7 +816,7 @@ const gradeSubmissionAnswer = async ({ answer_id, teacher_points_awarded, teache
   return prisma.submissionAnswer.update({
     where: { id: answer_id },
     data: { teacher_points_awarded, teacher_feedback: teacher_feedback ?? null },
-    include: { question: { select: { id: true, question_text: true, question_type: true, points: true } } },
+    include: { question: { select: { id: true, question_text: true, question_type: true, question_order: true, points: true } } },
   });
 };
 
@@ -757,7 +873,58 @@ const getSubmissionsByQuizId = async (quizId, { skip, take }) => {
   return { items, total };
 };
 
+const getQuizSubmissionInsights = async (quizId) => {
+  const [quiz, enrolledStudents, submissions] = await Promise.all([
+    prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: {
+        id: true, title: true, teacher_id: true,
+        course: { select: { id: true, name: true, code: true } },
+        questions: { orderBy: { question_order: "asc" }, select: { id: true, question_order: true, question_text: true, question_type: true, points: true } },
+      },
+    }),
+    prisma.enrollment.count({ where: { course: { quizzes: { some: { id: quizId } } } } }),
+    prisma.submission.findMany({
+      where: { quiz_id: quizId, status: { not: "IN_PROGRESS" } },
+      select: {
+        id: true, student_id: true, status: true, total_score: true, auto_score: true, manual_score: true,
+        answers: { select: { question_id: true, student_answer: true, is_correct: true, points_awarded: true, teacher_points_awarded: true, question: { select: { question_type: true } } } },
+      },
+    }),
+  ]);
+  if (!quiz) return null;
+
+  const maximumScore = quiz.questions.reduce((sum, question) => sum + (question.points || 0), 0);
+  const completedScores = submissions.filter((item) => ["GRADED", "RELEASED"].includes(item.status)).map((item) => item.total_score ?? item.auto_score + item.manual_score).sort((a, b) => a - b);
+  const average = completedScores.length ? completedScores.reduce((sum, score) => sum + score, 0) / completedScores.length : null;
+  const middle = Math.floor(completedScores.length / 2);
+  const median = completedScores.length ? (completedScores.length % 2 ? completedScores[middle] : (completedScores[middle - 1] + completedScores[middle]) / 2) : null;
+  const questionInsights = quiz.questions.map((question) => {
+    const responses = submissions.map((submission) => submission.answers.find((answer) => answer.question_id === question.id)).filter(Boolean);
+    const written = ["SHORT_Q", "LONG_Q"].includes(question.question_type);
+    const awarded = responses.map((answer) => written ? answer.teacher_points_awarded : answer.points_awarded).filter((score) => score !== null);
+    return {
+      ...question,
+      answered: responses.filter((answer) => answer.student_answer !== null && answer.student_answer !== "").length,
+      unanswered: submissions.length - responses.filter((answer) => answer.student_answer !== null && answer.student_answer !== "").length,
+      correct_rate: written || responses.length === 0 ? null : Math.round(responses.filter((answer) => answer.is_correct).length / responses.length * 1000) / 10,
+      average_points: awarded.length ? Math.round(awarded.reduce((sum, score) => sum + score, 0) / awarded.length * 10) / 10 : null,
+      awaiting_grading: written ? responses.filter((answer) => answer.teacher_points_awarded === null).length : 0,
+    };
+  });
+  const uniqueStudents = new Set(submissions.map((item) => item.student_id)).size;
+  return {
+    quiz: { id: quiz.id, title: quiz.title, course: quiz.course, maximum_score: maximumScore },
+    participation: { enrolled_students: enrolledStudents, unique_students: uniqueStudents, total_attempts: submissions.length, no_attempt: Math.max(enrolledStudents - uniqueStudents, 0), completion_rate: enrolledStudents ? Math.round(uniqueStudents / enrolledStudents * 1000) / 10 : 0 },
+    scores: { count: completedScores.length, average: average === null ? null : Math.round(average * 10) / 10, median, highest: completedScores.at(-1) ?? null, lowest: completedScores[0] ?? null },
+    awaiting_grading: questionInsights.reduce((sum, question) => sum + question.awaiting_grading, 0),
+    questions: questionInsights,
+    teacher_id: quiz.teacher_id,
+  };
+};
+
 module.exports = {
+  riskLevelForScore,
   createSubmission,
   getSubmissionById,
   listSubmissions,
@@ -780,4 +947,5 @@ module.exports = {
   completeSubmissionReview,
   releaseSubmissionScore,
   getSubmissionsByQuizId,
+  getQuizSubmissionInsights,
 };

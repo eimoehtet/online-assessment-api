@@ -21,6 +21,7 @@ const {
   getBehaviorLogByIdHandler,
   deleteBehaviorLogByIdHandler,
   getSubmissionsByQuizIdHandler,
+  getQuizSubmissionInsightsHandler,
 } = require("../controllers/submission.controller");
 
 const router = Router();
@@ -107,6 +108,11 @@ router.get(
   "/quiz/:quizId",
   authorizeRole("ADMIN", "TEACHER"),
   getSubmissionsByQuizIdHandler,
+);
+router.get(
+  "/quiz/:quizId/insights",
+  authorizeRole("ADMIN", "TEACHER"),
+  getQuizSubmissionInsightsHandler,
 );
 
 module.exports = router;

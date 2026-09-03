@@ -3,6 +3,7 @@ const {
   listCourses,
   getCourseById,
   getCourseByTeacherId,
+  getCourseRoster,
   findCourseByCode,
   updateCourseById,
   deleteCourseById,
@@ -48,6 +49,10 @@ const parseTeacherId = (value) => {
 
   return parsed;
 };
+
+const canViewCourseRoster = (user, course) =>
+  user?.role === "ADMIN" ||
+  (user?.role === "TEACHER" && course?.teacher_id === user.id);
 
 const createCourse = async (req, res) => {
   try {
@@ -163,6 +168,52 @@ const getCourseByTeacherIdHandler = async (req, res) => {
     });
   } catch (_error) {
     return res.status(500).json({ message: "Failed to fetch courses." });
+  }
+};
+
+const getCourseRosterHandler = async (req, res) => {
+  const courseId = parseCourseId(req.params.id);
+  if (!courseId) {
+    return res.status(400).json({ message: "Invalid course id." });
+  }
+
+  const shift = req.query.shift;
+  const allowedShifts = ["MORNING", "AFTERNOON", "EVENING"];
+  if (shift !== undefined && !allowedShifts.includes(shift)) {
+    return res.status(400).json({ message: "Invalid shift filter." });
+  }
+
+  try {
+    const course = await getCourseById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+    if (!canViewCourseRoster(req.user, course)) {
+      return res.status(403).json({ message: "Teachers can only view their own course rosters." });
+    }
+
+    const { page, limit, skip } = getPagination(req.query);
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const { items, total } = await getCourseRoster(courseId, {
+      skip,
+      take: limit,
+      search,
+      shift,
+    });
+
+    return res.status(200).json({
+      course: {
+        id: course.id,
+        name: course.name,
+        code: course.code,
+        shift: course.shift,
+        status: course.status,
+      },
+      data: items,
+      meta: paginationMeta({ page, limit, total }),
+    });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to fetch course roster." });
   }
 };
 
@@ -292,10 +343,12 @@ module.exports = {
   getCourses,
   getCourseById: getCourseByIdHandler,
   getCourseByTeacherId: getCourseByTeacherIdHandler,
+  getCourseRoster: getCourseRosterHandler,
   updateCourse,
   deleteCourse,
   getUniqueConflictMessage,
   parseCourseId,
+  canViewCourseRoster,
   getPagination,
   toggleCourseStatusHandler,
 };

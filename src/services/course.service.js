@@ -45,9 +45,60 @@ const getCourseById = async (id) => {
 const getCourseByTeacherId = async (teacher_id, { skip, take } = {}) => {
   const where = { teacher_id };
   const [items, total] = await Promise.all([
-    prisma.course.findMany({ where, skip, take, orderBy: { id: "asc" }, include: coursePublicInclude }),
+    prisma.course.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { id: "asc" },
+      include: {
+        ...coursePublicInclude,
+        _count: { select: { enrollments: true } },
+      },
+    }),
     prisma.course.count({ where }),
   ]);
+  return { items, total };
+};
+
+const getCourseRoster = async (courseId, { skip, take, search, shift } = {}) => {
+  const where = {
+    course_id: courseId,
+    ...(shift ? { shift } : {}),
+    ...(search
+      ? {
+          student: {
+            OR: [
+              { name: { contains: search } },
+              { student_id: { contains: search } },
+            ],
+          },
+        }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.enrollment.findMany({
+      where,
+      skip,
+      take,
+      orderBy: [{ student: { name: "asc" } }, { id: "asc" }],
+      select: {
+        id: true,
+        shift: true,
+        student: {
+          select: {
+            id: true,
+            student_id: true,
+            name: true,
+            email: true,
+            gender: true,
+          },
+        },
+      },
+    }),
+    prisma.enrollment.count({ where }),
+  ]);
+
   return { items, total };
 };
 
@@ -99,5 +150,6 @@ module.exports = {
   updateCourseById,
   deleteCourseById,
   getCourseByTeacherId,
+  getCourseRoster,
   toggleCourseStatus,
 };
