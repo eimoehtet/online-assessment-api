@@ -117,6 +117,9 @@ const getCourses = async (req, res) => {
       skip,
       take: limit,
       teacher_id: teacherId,
+      search: String(req.query.search || "").trim(),
+      status: req.query.status === undefined ? undefined : req.query.status === "true",
+      shift: req.query.shift || undefined,
     });
 
     return res.status(200).json({

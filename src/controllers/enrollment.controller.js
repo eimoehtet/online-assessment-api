@@ -181,7 +181,9 @@ const getEnrollmentsByCourse = async (req, res) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
 
-    const { items, total } = await getEnrollmentsByCourseRecord(courseId, { skip, take: limit });
+    const shift = req.query.shift;
+    if (shift && !["MORNING", "AFTERNOON", "EVENING"].includes(shift)) return res.status(400).json({ message: "Invalid shift filter." });
+    const { items, total } = await getEnrollmentsByCourseRecord(courseId, { skip, take: limit, search: String(req.query.search || "").trim(), shift });
 
     return res.status(200).json({
       data: items,
@@ -227,11 +229,15 @@ const updateEnrollment = async (req, res) => {
 
   const courseId = parseCourseId(req.body.course_id);
   const requestedStudentId = parseUserId(req.body.student_id);
+  const shift = req.body.shift;
 
   if (!courseId || !requestedStudentId) {
     return res
       .status(400)
       .json({ message: "Valid course_id and student_id are required." });
+  }
+  if (!shift || !["MORNING", "AFTERNOON", "EVENING"].includes(shift)) {
+    return res.status(400).json({ message: "A valid shift is required." });
   }
 
   try {
@@ -276,6 +282,7 @@ const updateEnrollment = async (req, res) => {
       enrollmentId,
       courseId,
       studentId,
+      shift,
     );
     return res.json(updatedEnrollment);
   } catch (error) {
@@ -365,7 +372,9 @@ const bulkEnrollment = async (req, res) => {
             role: "STUDENT",
             date_of_birth: student.date_of_birth,
             address: "N/A",
-            phone_number: String(student.phone_number),
+            phone_number: student.phone_number ? String(student.phone_number) : null,
+            gender: ["MALE", "FEMALE"].includes(String(student.gender || "").toUpperCase()) ? String(student.gender).toUpperCase() : null,
+            major: student.major || null,
           };
         });
 
@@ -381,6 +390,7 @@ const bulkEnrollment = async (req, res) => {
         data: allStudents.map((student) => ({
           course_id: courseId,
           student_id: student.id,
+          shift: course.shift,
         })),
         skipDuplicates: true,
       });

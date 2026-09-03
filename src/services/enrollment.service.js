@@ -84,16 +84,17 @@ const getEnrollmentById = async (id) => {
   });
 };
 
-const getEnrollmentsByCourse = async (courseId, { skip, take } = {}) => {
+const getEnrollmentsByCourse = async (courseId, { skip, take, search, shift } = {}) => {
+  const where = { course_id: courseId, ...(shift ? { shift } : {}), ...(search ? { student: { OR: [{ name: { contains: search } }, { student_id: { contains: search } }] } } : {}) };
   const [items, total] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { course_id: courseId },
+      where,
       skip,
       take,
       orderBy: { id: "asc" },
       include: publicInclude,
     }),
-    prisma.enrollment.count({ where: { course_id: courseId } }),
+    prisma.enrollment.count({ where }),
   ]);
 
   return { items, total };

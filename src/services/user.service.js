@@ -14,6 +14,7 @@ const userPublicSelect = {
   createdAt: true,
   updatedAt: true,
   status: true,
+  _count: { select: { courses: true, enrollments: true } },
 };
 
 const findUserByEmail = async (email) => {
@@ -52,8 +53,8 @@ const listUsers = async ({ skip, take, role }) => {
   return { items, total };
 };
 
-const getTeachers = async ({ skip, take, role }) => {
-  const where = { role: "TEACHER" };
+const getTeachers = async ({ skip, take, search, status }) => {
+  const where = { role: "TEACHER", ...(status !== undefined ? { status } : {}), ...(search ? { OR: [{ name: { contains: search } }, { email: { contains: search } }, { student_id: { contains: search } }] } : {}) };
 
   const [items, total] = await Promise.all([
     prisma.user.findMany({
@@ -68,8 +69,8 @@ const getTeachers = async ({ skip, take, role }) => {
   return { items, total };
 };
 
-const getStudents = async ({ skip, take, role }) => {
-  const where = { role: "STUDENT" };
+const getStudents = async ({ skip, take, search, status }) => {
+  const where = { role: "STUDENT", ...(status !== undefined ? { status } : {}), ...(search ? { OR: [{ name: { contains: search } }, { email: { contains: search } }, { student_id: { contains: search } }, { phone_number: { contains: search } }] } : {}) };
 
   const [items, total] = await Promise.all([
     prisma.user.findMany({

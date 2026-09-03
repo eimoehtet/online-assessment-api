@@ -304,7 +304,9 @@ const getTeachersByAdmin = async (req, res) => {
     if (role && role !== "TEACHER") {
       return res.status(400).json({ message: "Invalid role filter for teachers." });
     }
-    const { items, total } = await getTeachers({ skip, take: limit });
+    const status = req.query.status === undefined ? undefined : Number(req.query.status);
+    if (status !== undefined && ![0, 1].includes(status)) return res.status(400).json({ message: "Invalid status filter." });
+    const { items, total } = await getTeachers({ skip, take: limit, search: String(req.query.search || "").trim(), status });
     return res.status(200).json({
       data: items,
       meta: {
@@ -328,7 +330,9 @@ const getStudentsByAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid role filter for students." });
     }
 
-    const { items, total } = await getStudents({ skip, take: limit });
+    const status = req.query.status === undefined ? undefined : Number(req.query.status);
+    if (status !== undefined && ![0, 1].includes(status)) return res.status(400).json({ message: "Invalid status filter." });
+    const { items, total } = await getStudents({ skip, take: limit, search: String(req.query.search || "").trim(), status });
     return res.status(200).json({
       data: items,
       meta: {

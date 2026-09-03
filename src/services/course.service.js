@@ -7,8 +7,10 @@ const coursePublicInclude = {
       name: true,
       email: true,
       role: true,
+      status: true,
     },
   },
+  _count: { select: { enrollments: true, quizzes: true } },
 };
 
 const createCourse = async (data) => {
@@ -18,8 +20,13 @@ const createCourse = async (data) => {
   });
 };
 
-const listCourses = async ({ skip, take, teacher_id }) => {
-  const where = teacher_id ? { teacher_id } : undefined;
+const listCourses = async ({ skip, take, teacher_id, search, status, shift }) => {
+  const where = {
+    ...(teacher_id ? { teacher_id } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(shift ? { shift } : {}),
+    ...(search ? { OR: [{ name: { contains: search } }, { code: { contains: search } }] } : {}),
+  };
 
   const [items, total] = await Promise.all([
     prisma.course.findMany({

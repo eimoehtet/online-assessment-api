@@ -2,7 +2,7 @@ const prisma = require("../config/prisma");
 const { getCoursesForStudent } = require("./course.service");
 
 const getAdminStats = async () => {
-  const [courses, teachers, students, quizzes, publishedQuizzes, recentQuizzes] = await Promise.all([
+  const [courses, teachers, students, quizzes, publishedQuizzes, recentQuizzes, inactiveUsers, emptyCourses, readyToRelease] = await Promise.all([
     prisma.course.count(),
     prisma.user.count({ where: { role: "TEACHER" } }),
     prisma.user.count({ where: { role: "STUDENT" } }),
@@ -30,8 +30,11 @@ const getAdminStats = async () => {
         teacher: { select: { id: true, name: true } },
       },
     }),
+    prisma.user.count({ where: { status: 0 } }),
+    prisma.course.count({ where: { enrollments: { none: {} } } }),
+    prisma.submission.count({ where: { status: "GRADED" } }),
   ]);
-  return { courses, teachers, students, quizzes, publishedQuizzes, recentQuizzes };
+  return { courses, teachers, students, quizzes, publishedQuizzes, recentQuizzes, inactiveUsers, emptyCourses, readyToRelease };
 };
 
 const getTeacherStats = async (teacherId) => {
