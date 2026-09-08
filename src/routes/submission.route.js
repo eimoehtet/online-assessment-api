@@ -14,6 +14,7 @@ const {
   gradeSubmissionAnswerHandler,
   completeSubmissionReviewHandler,
   releaseSubmissionScoreHandler,
+  releaseQuizScoresHandler,
   deleteSubmissionAnswerByIdHandler,
   recordBehaviorLog,
   getSubmissionBehaviorSummary,
@@ -27,6 +28,7 @@ const {
 const router = Router();
 
 router.use(authMiddleware);
+router.post("/quiz/:quizId/release", authorizeRole("ADMIN", "TEACHER"), releaseQuizScoresHandler);
 
 router.get(
   "/",

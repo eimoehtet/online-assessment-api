@@ -708,6 +708,17 @@ const deleteBehaviorLogById = async (id) => {
 };
 
 const getBehaviorSummary = async ({ submission_id }) => {
+  const timingLogs = await prisma.behaviorLog.findMany({
+    where: { event_type: "TIME_SPENT_PER_Q", submission_answer: { submission_id } },
+    select: { metadata: true, submission_answer: { select: { question_id: true } } },
+  });
+  const timePerQuestion = {};
+  for (const log of timingLogs) {
+    const seconds = log.metadata?.seconds;
+    if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) continue;
+    const questionId = log.submission_answer.question_id;
+    timePerQuestion[questionId] = (timePerQuestion[questionId] ?? 0) + seconds;
+  }
   const grouped = await prisma.behaviorLog.groupBy({
     by: ["event_type"],
     where: {
@@ -745,6 +756,7 @@ const getBehaviorSummary = async ({ submission_id }) => {
 
   return {
     total_events: totalEvents,
+    time_per_question: timePerQuestion,
     event_counts: counts,
     risk_score: riskScore,
     risk_level: riskLevel,
@@ -882,6 +894,18 @@ const completeSubmissionReview = async ({ submission_id, reviewed_by, feedback }
   });
 };
 
+const releaseQuizScores = async (quiz_id, user) => {
+  const quiz = await prisma.quiz.findUnique({ where: { id: quiz_id }, select: { course: { select: { teacher_id: true } } } });
+  if (!quiz) throw Object.assign(new Error("Quiz not found."), { status: 404 });
+  if (user.role !== "ADMIN" && !(user.role === "TEACHER" && quiz.course.teacher_id === user.id)) {
+    throw Object.assign(new Error("Forbidden"), { status: 403 });
+  }
+  return prisma.submission.updateMany({
+    where: { quiz_id, status: "GRADED", ...(user.role === "TEACHER" ? { quiz: { course: { teacher_id: user.id } } } : {}) },
+    data: { status: "RELEASED", released_at: new Date() },
+  });
+};
+
 const releaseSubmissionScore = async (submission_id) => {
   const submission = await prisma.submission.findUnique({ where: { id: submission_id }, select: { status: true } });
   if (!submission || submission.status !== "GRADED") {
@@ -952,6 +976,7 @@ const getQuizSubmissionInsights = async (quizId) => {
     participation: { enrolled_students: enrolledStudents, unique_students: uniqueStudents, total_attempts: submissions.length, no_attempt: Math.max(enrolledStudents - uniqueStudents, 0), completion_rate: enrolledStudents ? Math.round(uniqueStudents / enrolledStudents * 1000) / 10 : 0 },
     scores: { count: completedScores.length, average: average === null ? null : Math.round(average * 10) / 10, median, highest: completedScores.at(-1) ?? null, lowest: completedScores[0] ?? null },
     awaiting_grading: questionInsights.reduce((sum, question) => sum + question.awaiting_grading, 0),
+    ready_to_release: submissions.filter((item) => item.status === "GRADED").length,
     questions: questionInsights,
     teacher_id: quiz.teacher_id,
   };
@@ -980,6 +1005,7 @@ module.exports = {
   gradeSubmissionAnswer,
   completeSubmissionReview,
   releaseSubmissionScore,
+  releaseQuizScores,
   getSubmissionsByQuizId,
   getQuizSubmissionInsights,
 };

@@ -19,6 +19,7 @@ const {
   gradeSubmissionAnswer,
   completeSubmissionReview,
   releaseSubmissionScore,
+  releaseQuizScores,
   getSubmissionsByQuizId,
   getQuizSubmissionInsights,
 } = require("../services/submission.service");
@@ -449,6 +450,19 @@ const completeSubmissionReviewHandler = async (req, res) => {
   }
 };
 
+const releaseQuizScoresHandler = async (req, res) => {
+  const quizId = parsePositiveInt(req.params.quizId);
+  if (!quizId) return res.status(400).json({ message: "Invalid quiz id." });
+  try {
+    const result = await releaseQuizScores(quizId, req.user);
+    return res.status(200).json({ released_count: result.count });
+  } catch (error) {
+    if ([403, 404].includes(error.status)) return res.status(error.status).json({ message: error.message });
+    console.error("Error releasing quiz scores:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 const releaseSubmissionScoreHandler = async (req, res) => {
   const submissionId = parsePositiveInt(req.params.id);
   if (!submissionId) return res.status(400).json({ message: "Invalid submission id." });
@@ -827,6 +841,7 @@ module.exports = {
   gradeSubmissionAnswerHandler,
   completeSubmissionReviewHandler,
   releaseSubmissionScoreHandler,
+  releaseQuizScoresHandler,
   deleteSubmissionAnswerByIdHandler,
   recordBehaviorLog,
   getSubmissionBehaviorSummary,
