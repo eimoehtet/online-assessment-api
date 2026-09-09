@@ -21,10 +21,8 @@ const publicInclude = {
       name: true,
       email: true,
       student_id: true,
-      phone_number: true,
+      major: true,
       gender: true,
-      address: true,
-      date_of_birth: true,
     },
   },
 };

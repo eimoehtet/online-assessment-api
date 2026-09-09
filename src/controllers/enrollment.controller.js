@@ -338,7 +338,7 @@ const bulkEnrollment = async (req, res) => {
       return res.status(404).json({ message: "Course not found." });
     }
 
-    const password = await bcrypt.hash("Default123!", 10);
+    const password = await bcrypt.hash("Student@123", 10);
     const uniqueStudents = new Map();
 
     for (const student of students) {
@@ -364,6 +364,7 @@ const bulkEnrollment = async (req, res) => {
         .filter((studentId) => !existingStudentIds.has(studentId))
         .map((studentId) => {
           const student = uniqueStudents.get(studentId);
+          const gender = String(student.gender || "").trim().toUpperCase();
           return {
             name: student.name,
             email: `${studentId}@ppiu.edu.kh`,
@@ -373,7 +374,7 @@ const bulkEnrollment = async (req, res) => {
             date_of_birth: student.date_of_birth,
             address: "N/A",
             phone_number: student.phone_number ? String(student.phone_number) : null,
-            gender: ["MALE", "FEMALE"].includes(String(student.gender || "").toUpperCase()) ? String(student.gender).toUpperCase() : null,
+            gender: ["M", "MALE"].includes(gender) ? "MALE" : ["F", "FEMALE"].includes(gender) ? "FEMALE" : null,
             major: student.major || null,
           };
         });

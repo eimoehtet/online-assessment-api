@@ -8,11 +8,7 @@ const userPublicSelect = {
   role: true,
   gender: true,
   student_id: true,
-  phone_number: true,
-  date_of_birth: true,
-  address: true,
-  createdAt: true,
-  updatedAt: true,
+  major: true,
   status: true,
   _count: { select: { courses: true, enrollments: true } },
 };
