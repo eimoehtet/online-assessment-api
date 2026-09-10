@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
+import submissionService from "../src/services/submission.service.js";
 import courseService from "../src/services/course.service.js";
 import submissionController from "../src/controllers/submission.controller.js";
 
 const { quizAvailability } = courseService;
 const { hideUnreleasedScores } = submissionController;
+const prisma = createRequire(import.meta.url)("../src/config/prisma.js");
 
 describe("student quiz availability", () => {
   const now = new Date("2026-09-03T12:00:00Z");
@@ -15,6 +18,32 @@ describe("student quiz availability", () => {
     expect(quizAvailability({ ...base, submissions: [{ status: "IN_PROGRESS" }] }, now)).toBe("IN_PROGRESS");
     expect(quizAvailability({ ...base, submissions: [{ status: "SUBMITTED" }, { status: "RELEASED" }] }, now)).toBe("COMPLETED");
     expect(quizAvailability({ ...base, end_date: new Date("2026-09-03T11:00:00Z") }, now)).toBe("CLOSED");
+  });
+
+  it("blocks absent students while allowing present students and unmarked attendance", () => {
+    expect(quizAvailability({ ...base, quizAttendances: [{ status: false }] }, now)).toBe("ABSENT");
+    expect(quizAvailability({ ...base, quizAttendances: [{ status: true }] }, now)).toBe("AVAILABLE");
+    expect(quizAvailability({ ...base, quizAttendances: [] }, now)).toBe("AVAILABLE");
+  });
+});
+
+describe("starting a quiz with attendance", () => {
+  it.each([false, true, null])("checks attendance status %s before creating an attempt", async (status) => {
+    vi.spyOn(prisma.quiz, "findUnique").mockResolvedValue({ status: "PUBLISHED", course_id: 2, start_date: new Date(0), end_date: new Date(Date.now() + 60000), allowed_attempts: 1 });
+    vi.spyOn(prisma.enrollment, "findUnique").mockResolvedValue({ id: 1 });
+    const attendance = vi.spyOn(prisma.quizAttendance, "findUnique").mockResolvedValue(status === null ? null : { status });
+    vi.spyOn(prisma.submission, "count").mockResolvedValue(0);
+    const create = vi.spyOn(prisma.submission, "create").mockResolvedValue({ id: 9 });
+    try {
+      const attempt = submissionService.createSubmission({ student_id: 4, quiz_id: 3 });
+      if (status === false) {
+        await expect(attempt).rejects.toMatchObject({ code: "QUIZ_ABSENT" });
+        expect(create).not.toHaveBeenCalled();
+      } else {
+        await expect(attempt).resolves.toEqual({ id: 9 });
+      }
+      expect(attendance).toHaveBeenCalledWith({ where: { quiz_id_student_id: { quiz_id: 3, student_id: 4 } }, select: { status: true } });
+    } finally { vi.restoreAllMocks(); }
   });
 });
 

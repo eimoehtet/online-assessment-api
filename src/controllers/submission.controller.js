@@ -292,7 +292,7 @@ const startSubmission = async (req, res) => {
       return res.status(409).json({ message: error.message });
     }
 
-    if (error.code === "NOT_ENROLLED") {
+    if (error.code === "NOT_ENROLLED" || error.code === "QUIZ_ABSENT") {
       return res.status(403).json({ message: error.message });
     }
 

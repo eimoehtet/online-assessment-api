@@ -190,6 +190,17 @@ const createSubmission = async ({ student_id, quiz_id }) => {
     throw error;
   }
 
+  const attendance = await prisma.quizAttendance.findUnique({
+    where: { quiz_id_student_id: { quiz_id, student_id } },
+    select: { status: true },
+  });
+
+  if (attendance?.status === false) {
+    const error = new Error("You are marked absent for this quiz and cannot start it.");
+    error.code = "QUIZ_ABSENT";
+    throw error;
+  }
+
   const attemptCount = await prisma.submission.count({
     where: {
       student_id,

@@ -116,6 +116,7 @@ const quizAvailability = (quiz, now = new Date()) => {
   const inProgress = quiz.submissions?.some((submission) => submission.status === "IN_PROGRESS");
   if (inProgress) return "IN_PROGRESS";
   if ((quiz.submissions?.length || 0) >= quiz.allowed_attempts) return "COMPLETED";
+  if (quiz.quizAttendances?.[0]?.status === false) return "ABSENT";
   return "AVAILABLE";
 };
 
@@ -132,6 +133,7 @@ const studentCourseSelect = (studentId) => ({
         select: {
           id: true, title: true, status: true, start_date: true, end_date: true,
           time_limit: true, allowed_attempts: true,
+          quizAttendances: { where: { student_id: studentId }, select: { status: true } },
           submissions: { where: { student_id: studentId }, select: { id: true, status: true, completed_at: true, submitted_at: true, total_score: true } },
           questions: { select: { points: true } },
         },

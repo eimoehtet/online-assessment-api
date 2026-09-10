@@ -197,6 +197,7 @@ const createUserByAdmin = async (req, res) => {
       password,
       role,
       student_id = null,
+      major,
       phone_number,
       date_of_birth,
       gender,
@@ -249,6 +250,7 @@ const createUserByAdmin = async (req, res) => {
       password: hashedPassword,
       role,
       student_id,
+      major: normalizeOptionalString(major),
       phone_number: normalizeOptionalString(phone_number),
       date_of_birth: parsedDateOfBirth,
       gender,
@@ -379,6 +381,7 @@ const updateUserByAdmin = async (req, res) => {
       password,
       role,
       student_id,
+      major,
       phone_number,
       date_of_birth,
       gender,
@@ -390,6 +393,7 @@ const updateUserByAdmin = async (req, res) => {
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
     if (student_id !== undefined) data.student_id = student_id;
+    if (major !== undefined) data.major = normalizeOptionalString(major);
     if (phone_number !== undefined) data.phone_number = normalizeOptionalString(phone_number);
     if (address !== undefined) data.address = normalizeOptionalString(address);
     if (date_of_birth !== undefined) {
