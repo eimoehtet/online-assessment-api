@@ -7,6 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model QuizEditorDraft {
+  teacher_id Int
+  editor_key String @db.VarChar(32)
+  payload Json?
+  version Int @default(1)
+  updated_at DateTime @updatedAt
+
+  @@id([teacher_id, editor_key])
+  @@map("quiz_editor_drafts")
+}
+
 enum Role {
   ADMIN
   TEACHER

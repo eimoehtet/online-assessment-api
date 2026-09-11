@@ -21,6 +21,11 @@ const router = Router();
 
 router.use(authMiddleware);
 
+const { quizDraft } = require("../controllers/quiz-draft.controller");
+router.get("/editor-drafts/:key", authorizeRole("TEACHER"), quizDraft);
+router.put("/editor-drafts/:key", authorizeRole("TEACHER"), quizDraft);
+router.delete("/editor-drafts/:key", authorizeRole("TEACHER"), quizDraft);
+
 router.post("/", authorizeRole("ADMIN", "TEACHER"), createQuiz);
 router.get("/", authorizeRole("ADMIN", "TEACHER", "STUDENT"), listQuizzes);
 router.get("/teacher/:teacherId", authorizeRole("TEACHER"), getQuizzesByTeacherId);
