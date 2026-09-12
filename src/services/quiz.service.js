@@ -173,7 +173,7 @@ const getStudentsByQuizIdAndTeacherId = async (quizId, teacherId, { skip, take }
         student: {
           select: {
             id: true, name: true, email: true, student_id: true,
-            phone_number: true, gender: true, address: true, date_of_birth: true, status: true,
+            gender: true, major: true, status: true,
           },
         },
       },
